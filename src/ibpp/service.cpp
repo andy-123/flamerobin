@@ -843,22 +843,6 @@ void ServiceImpl::Wait()
 	}
 }
 
-IBPP::IService* ServiceImpl::AddRef()
-{
-	ASSERTION(mRefCount >= 0);
-	++mRefCount;
-	return this;
-}
-
-void ServiceImpl::Release()
-{
-	// Release cannot throw, except in DEBUG builds on assertion
-	ASSERTION(mRefCount >= 0);
-	--mRefCount;
-	try { if (mRefCount <= 0) delete this; }
-		catch (...) { }
-}
-
 //	(((((((( OBJECT INTERNAL METHODS ))))))))
 
 void ServiceImpl::SetServerName(const char* newName)
@@ -898,7 +882,7 @@ void ibpp_internals::ServiceImpl::SetRoleName(const char* newRoleName)
 ServiceImpl::ServiceImpl(const std::string& ServerName,
 			const std::string& UserName, const std::string& UserPassword, 
             const std::string& RoleName, const std::string& CharSet)
-	:	mRefCount(0), mHandle(0),
+	:	mHandle(0),
 		mServerName(ServerName), mUserName(UserName), mUserPassword(UserPassword),
         mRoleName(RoleName), mCharSet(CharSet)
 {

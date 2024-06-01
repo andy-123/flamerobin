@@ -179,22 +179,6 @@ IBPP::Database EventsImpl::DatabasePtr() const
 	return mDatabase;
 }
 
-IBPP::IEvents* EventsImpl::AddRef()
-{
-	ASSERTION(mRefCount >= 0);
-	++mRefCount;
-	return this;
-}
-
-void EventsImpl::Release()
-{
-	// Release cannot throw, except in DEBUG builds on assertion
-	ASSERTION(mRefCount >= 0);
-	--mRefCount;
-	try { if (mRefCount <= 0) delete this; }
-		catch (...) { }
-}
-
 //	(((((((( OBJECT INTERNAL METHODS ))))))))
 
 void EventsImpl::Queue()
@@ -342,7 +326,6 @@ void EventsImpl::DetachDatabaseImpl()
 }
 
 EventsImpl::EventsImpl(DatabaseImpl* database)
-	: mRefCount(0)
 {
 	mDatabase = 0;
 	mId = 0;

@@ -400,22 +400,6 @@ void DatabaseImpl::Users(std::vector<std::string>& users)
     return;
 }
 
-IBPP::IDatabase* DatabaseImpl::AddRef()
-{
-    ASSERTION(mRefCount >= 0);
-    ++mRefCount;
-    return this;
-}
-
-void DatabaseImpl::Release()
-{
-    // Release cannot throw, except in DEBUG builds on assertion
-    ASSERTION(mRefCount >= 0);
-    --mRefCount;
-    try { if (mRefCount <= 0) delete this; }
-        catch (...) { }
-}
-
 //  (((((((( OBJECT INTERNAL METHODS ))))))))
 
 void DatabaseImpl::AttachTransactionImpl(TransactionImpl* tr)
@@ -513,7 +497,7 @@ DatabaseImpl::DatabaseImpl(const std::string& ServerName, const std::string& Dat
                            const std::string& RoleName, const std::string& CharSet,
                            const std::string& CreateParams) :
 
-    mRefCount(0), mHandle(0),
+    mHandle(0),
     mServerName(ServerName), mDatabaseName(DatabaseName),
     mUserName(UserName), mUserPassword(UserPassword), mRoleName(RoleName),
     mCharSet(CharSet), mCreateParams(CreateParams),

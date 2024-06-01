@@ -901,22 +901,6 @@ IBPP::Transaction ArrayImpl::TransactionPtr() const
 	return mTransaction;
 }
 
-IBPP::IArray* ArrayImpl::AddRef()
-{
-	ASSERTION(mRefCount >= 0);
-	++mRefCount;
-	return this;
-}
-
-void ArrayImpl::Release()
-{
-	// Release cannot throw, except in DEBUG builds on assertion
-	ASSERTION(mRefCount >= 0);
-	--mRefCount;
-	try { if (mRefCount <= 0) delete this; }
-		catch (...) { }
-}
-
 //	(((((((( OBJECT INTERNAL METHODS ))))))))
 
 void ArrayImpl::Init()
@@ -1012,7 +996,6 @@ void ArrayImpl::DetachTransactionImpl()
 }
 
 ArrayImpl::ArrayImpl(DatabaseImpl* database, TransactionImpl* transaction)
-	: mRefCount(0)
 {
 	Init();
 	AttachDatabaseImpl(database);

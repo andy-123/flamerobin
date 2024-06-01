@@ -1584,23 +1584,6 @@ IBPP::Transaction StatementImpl::TransactionPtr() const
 	return mTransaction;
 }
 
-IBPP::IStatement* StatementImpl::AddRef()
-{
-	ASSERTION(mRefCount >= 0);
-	++mRefCount;
-
-	return this;
-}
-
-void StatementImpl::Release()
-{
-	// Release cannot throw, except in DEBUG builds on assertion
-	ASSERTION(mRefCount >= 0);
-	--mRefCount;
-	try { if (mRefCount <= 0) delete this; }
-		catch (...) { }
-}
-
 //	(((((((( OBJECT INTERNAL METHODS ))))))))
 
 void StatementImpl::AttachDatabaseImpl(DatabaseImpl* database)
@@ -1660,7 +1643,7 @@ void StatementImpl::CursorFree()
 }
 
 StatementImpl::StatementImpl(DatabaseImpl* database, TransactionImpl* transaction)
-	: mRefCount(0), mHandle(0), mDatabase(0), mTransaction(0),
+	: mHandle(0), mDatabase(0), mTransaction(0),
 	mInRow(0), mOutRow(0),
 	mResultSetAvailable(false), mCursorOpened(false), mType(IBPP::stUnknown)
 {

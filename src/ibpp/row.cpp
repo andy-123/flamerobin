@@ -853,22 +853,6 @@ IBPP::IRow* RowImpl::Clone()
 	return clone;
 }
 
-IBPP::IRow* RowImpl::AddRef()
-{
-	ASSERTION(mRefCount >= 0);
-	++mRefCount;
-	return this;
-}
-
-void RowImpl::Release()
-{
-	// Release cannot throw, except in DEBUG builds on assertion
-	ASSERTION(mRefCount >= 0);
-	--mRefCount;
-	try { if (mRefCount <= 0) delete this; }
-		catch (...) { }
-}
-
 //	(((((((( OBJECT INTERNAL METHODS ))))))))
 
 void RowImpl::SetValue(int varnum, IITYPE ivType, const void* value, int userlen)
@@ -1709,14 +1693,14 @@ RowImpl& RowImpl::operator=(const RowImpl& copied)
 }
 
 RowImpl::RowImpl(const RowImpl& copied)
-	: IBPP::IRow(), mRefCount(0), mDescrArea(0)
+	: IBPP::IRow(), mDescrArea(0)
 {
 	// mRefCount and mDescrArea are set to 0 before using the assignment operator
 	*this = copied;		// The assignment operator does the real copy
 }
 
 RowImpl::RowImpl(int dialect, int n, DatabaseImpl* db, TransactionImpl* tr)
-	: mRefCount(0), mDescrArea(0)
+	: mDescrArea(0)
 {
 	Resize(n);
 	mDialect = dialect;

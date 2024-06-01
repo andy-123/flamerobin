@@ -202,22 +202,6 @@ void TransactionImpl::RollbackRetain()
         throw SQLExceptionImpl(status, "Transaction::RollbackRetain");
 }
 
-IBPP::ITransaction* TransactionImpl::AddRef()
-{
-    ASSERTION(mRefCount >= 0);
-    ++mRefCount;
-    return this;
-}
-
-void TransactionImpl::Release()
-{
-    // Release cannot throw, except in DEBUG builds on assertion
-    ASSERTION(mRefCount >= 0);
-    --mRefCount;
-    try { if (mRefCount <= 0) delete this; }
-        catch (...) { }
-}
-
 //  (((((((( OBJECT INTERNAL METHODS ))))))))
 
 void TransactionImpl::Init()
@@ -350,7 +334,6 @@ void TransactionImpl::DetachDatabaseImpl(DatabaseImpl* dbi)
 
 TransactionImpl::TransactionImpl(DatabaseImpl* db,
     IBPP::TAM am, IBPP::TIL il, IBPP::TLR lr, IBPP::TFF flags)
-    : mRefCount(0)
 {
     Init();
     AttachDatabaseImpl(db, am, il, lr, flags);

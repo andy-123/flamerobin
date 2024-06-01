@@ -755,7 +755,6 @@ class ServiceImpl : public IBPP::IService
     //  (((((((( OBJECT INTERNALS ))))))))
 
 private:
-    int mRefCount;              // Reference counter
     isc_svc_handle mHandle;     // Firebird API Service Handle
     std::string mServerName;    // Server Name
     std::string mUserName;      // User Name
@@ -832,9 +831,6 @@ public:
 
     const char* WaitMsg();
     void Wait();
-
-    IBPP::IService* AddRef();
-    void Release();
 };
 
 class DatabaseImpl : public IBPP::IDatabase
@@ -843,7 +839,6 @@ class DatabaseImpl : public IBPP::IDatabase
 
     FBCLIENT gdsM;	// Local GDS instance
 
-    int mRefCount;              // Reference counter
     isc_db_handle mHandle;      // InterBase API Session Handle
     std::string mServerName;    // Server name
     std::string mDatabaseName;  // Database name (path/file)
@@ -912,10 +907,6 @@ public:
     void Disconnect();
     void Drop();
     IBPP::IDatabase* Clone();
-
-
-    IBPP::IDatabase* AddRef();
-    void Release();
 };
 
 class TransactionImpl : public IBPP::ITransaction
@@ -923,7 +914,6 @@ class TransactionImpl : public IBPP::ITransaction
     //  (((((((( OBJECT INTERNALS ))))))))
 
 private:
-    int mRefCount;                  // Reference counter
     isc_tr_handle mHandle;          // Transaction InterBase
 
     std::vector<DatabaseImpl*> mDatabases;      // Table of IDatabase*
@@ -972,9 +962,6 @@ public:
     void Rollback();
     void CommitRetain();
     void RollbackRetain();
-
-    IBPP::ITransaction* AddRef();
-    void Release();
 };
 
 class RowImpl : public IBPP::IRow
@@ -982,8 +969,6 @@ class RowImpl : public IBPP::IRow
     //  (((((((( OBJECT INTERNALS ))))))))
 
 private:
-    int mRefCount;                  // Reference counter
-
     XSQLDA* mDescrArea;             // XSQLDA descriptor itself
     std::vector<double> mNumerics;  // Temporary storage for Numerics
     std::vector<float> mFloats;     // Temporary storage for Floats
@@ -1093,8 +1078,6 @@ public:
     IBPP::Transaction TransactionPtr() const;
 
     IBPP::IRow* Clone();
-    IBPP::IRow* AddRef();
-    void Release();
 };
 
 class StatementImpl : public IBPP::IStatement
@@ -1104,7 +1087,6 @@ class StatementImpl : public IBPP::IStatement
 private:
     friend class TransactionImpl;
 
-    int mRefCount;              // Reference counter
     isc_stmt_handle mHandle;    // Statement Handle
 
     DatabaseImpl* mDatabase;        // Attached database
@@ -1266,9 +1248,6 @@ public:
 
     IBPP::Database DatabasePtr() const;
     IBPP::Transaction TransactionPtr() const;
-
-    IBPP::IStatement* AddRef();
-    void Release();
 };
 
 class BlobImpl : public IBPP::IBlob
@@ -1278,7 +1257,6 @@ class BlobImpl : public IBPP::IBlob
 private:
     friend class RowImpl;
 
-    int mRefCount;
     bool                    mIdAssigned;
     ISC_QUAD                mId;
     isc_blob_handle         mHandle;
@@ -1317,9 +1295,6 @@ public:
 
     IBPP::Database DatabasePtr() const;
     IBPP::Transaction TransactionPtr() const;
-
-    IBPP::IBlob* AddRef();
-    void Release();
 };
 
 class ArrayImpl : public IBPP::IArray
@@ -1329,7 +1304,6 @@ class ArrayImpl : public IBPP::IArray
 private:
     friend class RowImpl;
 
-    int                 mRefCount;      // Reference counter
     bool                mIdAssigned;
     ISC_QUAD            mId;
     bool                mDescribed;
@@ -1373,9 +1347,6 @@ public:
 
     IBPP::Database DatabasePtr() const;
     IBPP::Transaction TransactionPtr() const;
-
-    IBPP::IArray* AddRef();
-    void Release();
 };
 
 //
@@ -1425,8 +1396,6 @@ class EventsImpl : public IBPP::IEvents
     Buffer mEventBuffer;
     Buffer mResultsBuffer;
 
-    int mRefCount;      // Reference counter
-
     DatabaseImpl* mDatabase;
     ISC_LONG mId;           // Firebird internal Id of these events
     bool mQueued;           // Has isc_que_events() been called?
@@ -1458,9 +1427,6 @@ public:
     void Dispatch();            // Dispatch NON async events
 
     IBPP::Database DatabasePtr() const;
-
-    IBPP::IEvents* AddRef();
-    void Release();
 };
 
 void encodeDate(ISC_DATE& isc_dt, const IBPP::Date& dt);

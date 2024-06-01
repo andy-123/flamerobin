@@ -251,22 +251,6 @@ IBPP::Transaction BlobImpl::TransactionPtr() const
 	return mTransaction;
 }
 
-IBPP::IBlob* BlobImpl::AddRef()
-{
-	ASSERTION(mRefCount >= 0);
-	++mRefCount;
-	return this;
-}
-
-void BlobImpl::Release()
-{
-	// Release cannot throw, except in DEBUG builds on assertion
-	ASSERTION(mRefCount >= 0);
-	--mRefCount;
-	try { if (mRefCount <= 0) delete this; }
-		catch (...) { }
-}
-
 //	(((((((( OBJECT INTERNAL METHODS ))))))))
 
 void BlobImpl::Init()
@@ -338,7 +322,6 @@ void BlobImpl::DetachTransactionImpl()
 }
 
 BlobImpl::BlobImpl(DatabaseImpl* database, TransactionImpl* transaction)
-	: mRefCount(0)
 {
 	Init();
 	AttachDatabaseImpl(database);

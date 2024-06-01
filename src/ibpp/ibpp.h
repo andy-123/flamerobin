@@ -558,13 +558,27 @@ public:
     class IEvents;          typedef Ptr<IEvents> Events;
     class IRow;             typedef Ptr<IRow> Row;
 
+    /* IBaseRefCount is the base class of all Ixxx-classes
+     * like IBlob, IArray, ... */
+    template <typename T>
+    class IBaseRefCount
+    {
+    private:
+        int mRefCount; // Reference counter
+    public:
+        virtual T* AddRef();
+        virtual void Release();
+
+        IBaseRefCount() : mRefCount(0) {};
+    };
+
     /* IBlob is the interface to the blob capabilities of IBPP. Blob is the
      * object class you actually use in your programming. In Firebird, at the
      * row level, a blob is merely a handle to a blob, stored elsewhere in the
      * database. Blob allows you to retrieve such a handle and then read from or
      * write to the blob, much in the same manner than you would do with a file. */
 
-    class IBlob
+    class IBlob : public IBaseRefCount<IBlob>
     {
     public:
         virtual void Create() = 0;
@@ -581,9 +595,6 @@ public:
         virtual Database DatabasePtr() const = 0;
         virtual Transaction TransactionPtr() const = 0;
 
-        virtual IBlob* AddRef() = 0;
-        virtual void Release() = 0;
-
         virtual ~IBlob() { }
     };
 
@@ -591,7 +602,7 @@ public:
     * object class you actually use in your programming. With an Array object, you
     * can create, read and write Interbase Arrays, as a whole or in slices. */
 
-    class IArray
+    class IArray : public IBaseRefCount<IArray>
     {
     public:
         virtual void Describe(const std::string& table, const std::string& column) = 0;
@@ -607,9 +618,6 @@ public:
         virtual Database DatabasePtr() const = 0;
         virtual Transaction TransactionPtr() const = 0;
 
-        virtual IArray* AddRef() = 0;
-        virtual void Release() = 0;
-
         virtual ~IArray() { }
     };
 
@@ -618,7 +626,7 @@ public:
      * object, you can do some maintenance work of databases and servers
      * (backup, restore, create/update users, ...) */
 
-    class IService
+    class IService : public IBaseRefCount<IService>
     {
     public:
         virtual void Connect() = 0;
@@ -664,9 +672,6 @@ public:
         virtual const char* WaitMsg() = 0;  // With reporting (does not block)
         virtual void Wait() = 0;            // Without reporting (does block)
 
-        virtual IService* AddRef() = 0;
-        virtual void Release() = 0;
-
         virtual ~IService() { }
     };
 
@@ -688,7 +693,7 @@ public:
     };
     typedef std::map<int, CountInfo> DatabaseCounts; // int = relation ID
 
-    class IDatabase
+    class IDatabase : public IBaseRefCount<IDatabase>
     {
     public:
         virtual const char* ServerName() const = 0;
@@ -721,9 +726,6 @@ public:
 
         virtual IDatabase* Clone() = 0;
 
-        virtual IDatabase* AddRef() = 0;
-        virtual void Release() = 0;
-
         virtual ~IDatabase() { }
     };
 
@@ -735,7 +737,7 @@ public:
      * programming interfaces to Firebird that allows you to support distributed
      * transactions. */
 
-    class ITransaction
+    class ITransaction : public IBaseRefCount<ITransaction>
     {
     public:
         virtual void AttachDatabase(Database db, TAM am = amWrite,
@@ -751,9 +753,6 @@ public:
         virtual void CommitRetain() = 0;
         virtual void RollbackRetain() = 0;
 
-        virtual ITransaction* AddRef() = 0;
-        virtual void Release() = 0;
-
         virtual ~ITransaction() { }
     };
 
@@ -761,7 +760,7 @@ public:
      *  Class Row can hold all the values of a row (from a SELECT for instance).
      */
 
-    class IRow
+    class IRow : public IBaseRefCount<IRow>
     {
     public:
         virtual void SetNull(int) = 0;
@@ -836,8 +835,6 @@ public:
         virtual Transaction TransactionPtr() const = 0;
 
         virtual IRow* Clone() = 0;
-        virtual IRow* AddRef() = 0;
-        virtual void Release() = 0;
 
         virtual ~IRow() {}
     };
@@ -849,7 +846,7 @@ public:
      * set of a query (when the statement is such), one row at a time and in
      * strict forward direction. */
 
-    class IStatement
+    class IStatement : public IBaseRefCount<IStatement>
     {
     public:
         virtual void Prepare(const std::string&) = 0;
@@ -961,9 +958,6 @@ public:
         virtual Database DatabasePtr() const = 0;
         virtual Transaction TransactionPtr() const = 0;
 
-        virtual IStatement* AddRef() = 0;
-        virtual void Release() = 0;
-
         virtual ~IStatement() { }
 
         // DEPRECATED METHODS (WON'T BE AVAILABLE IN VERSIONS 3.x)
@@ -983,7 +977,7 @@ public:
         virtual bool Get(const std::string&, double*) = 0;  // DEPRECATED
     };
 
-    class IEvents
+    class IEvents : public IBaseRefCount<IEvents>
     {
     public:
         virtual void Add(const std::string&, EventInterface*) = 0;
@@ -993,9 +987,6 @@ public:
         virtual void Dispatch() = 0;            // Dispatch events (calls handlers)
 
         virtual Database DatabasePtr() const = 0;
-
-        virtual IEvents* AddRef() = 0;
-        virtual void Release() = 0;
 
         virtual ~IEvents() { }
     };

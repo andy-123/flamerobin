@@ -313,6 +313,7 @@ list(APPEND IBPP_SOURCE_LIST
         ${SOURCEDIR}/ibpp/_spb.cpp
         ${SOURCEDIR}/ibpp/_tpb.cpp
         ${SOURCEDIR}/ibpp/array.cpp
+        ${SOURCEDIR}/ibpp/baserefcount.cpp
         ${SOURCEDIR}/ibpp/blob.cpp
         ${SOURCEDIR}/ibpp/database.cpp
         ${SOURCEDIR}/ibpp/date.cpp

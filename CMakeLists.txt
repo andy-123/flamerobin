@@ -312,21 +312,21 @@ list(APPEND IBPP_SOURCE_LIST
         ${SOURCEDIR}/ibpp/_rb.cpp
         ${SOURCEDIR}/ibpp/_spb.cpp
         ${SOURCEDIR}/ibpp/_tpb.cpp
-        ${SOURCEDIR}/ibpp/array.cpp
         ${SOURCEDIR}/ibpp/baserefcount.cpp
-        ${SOURCEDIR}/ibpp/blob.cpp
-        ${SOURCEDIR}/ibpp/database.cpp
         ${SOURCEDIR}/ibpp/date.cpp
         ${SOURCEDIR}/ibpp/dbkey.cpp
-        ${SOURCEDIR}/ibpp/events.cpp
         ${SOURCEDIR}/ibpp/exception.cpp
+        ${SOURCEDIR}/ibpp/fb1/array1.cpp
+        ${SOURCEDIR}/ibpp/fb1/blob1.cpp
+        ${SOURCEDIR}/ibpp/fb1/database1.cpp
+        ${SOURCEDIR}/ibpp/fb1/events1.cpp
+        ${SOURCEDIR}/ibpp/fb1/row1.cpp
+        ${SOURCEDIR}/ibpp/fb1/service1.cpp
+        ${SOURCEDIR}/ibpp/fb1/statement1.cpp
+        ${SOURCEDIR}/ibpp/fb1/transaction1.cpp
         ${SOURCEDIR}/ibpp/fbinterfaces.cpp
         ${SOURCEDIR}/ibpp/ibint128.cpp
-        ${SOURCEDIR}/ibpp/row.cpp
-        ${SOURCEDIR}/ibpp/service.cpp
-        ${SOURCEDIR}/ibpp/statement.cpp
         ${SOURCEDIR}/ibpp/time.cpp
-        ${SOURCEDIR}/ibpp/transaction.cpp
         ${SOURCEDIR}/ibpp/user.cpp
 )
 list(APPEND IBPP_HEADER_LIST

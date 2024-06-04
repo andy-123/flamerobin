@@ -199,6 +199,24 @@ SQLExceptionImpl::SQLExceptionImpl(const IBS& status, const std::string& context
 	mWhat.append(status.ErrorMessage());
 }
 
+SQLExceptionImpl::SQLExceptionImpl(Firebird::IStatus* mStatus, const std::string& context,
+                        const char* message, ...) throw()
+{
+	va_list argptr;
+	va_start(argptr, message);
+	mWhat.assign("*** IBPP::SQLException ***\n");
+	raise(context, message, argptr);
+	va_end(argptr);
+    #ifdef FIXME
+	mSqlCode = status.SqlCode();
+	mEngineCode = status.EngineCode();
+	mWhat.append(status.ErrorMessage());
+    #endif
+    mSqlCode = 111;
+    mEngineCode = 222;
+    mWhat.append("Todo");
+}
+
 SQLExceptionImpl::~SQLExceptionImpl() throw ()
 {
 }

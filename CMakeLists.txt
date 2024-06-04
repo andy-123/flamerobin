@@ -306,7 +306,6 @@ list(APPEND HEADER_LIST
 
 # IBPP static lib source files
 list(APPEND IBPP_SOURCE_LIST
-        ${SOURCEDIR}/ibpp/_dpb.cpp
         ${SOURCEDIR}/ibpp/_ibpp.cpp
         ${SOURCEDIR}/ibpp/_ibs.cpp
         ${SOURCEDIR}/ibpp/_rb.cpp
@@ -316,6 +315,7 @@ list(APPEND IBPP_SOURCE_LIST
         ${SOURCEDIR}/ibpp/date.cpp
         ${SOURCEDIR}/ibpp/dbkey.cpp
         ${SOURCEDIR}/ibpp/exception.cpp
+        ${SOURCEDIR}/ibpp/fb1/_dpb1.cpp
         ${SOURCEDIR}/ibpp/fb1/array1.cpp
         ${SOURCEDIR}/ibpp/fb1/blob1.cpp
         ${SOURCEDIR}/ibpp/fb1/database1.cpp
@@ -325,6 +325,16 @@ list(APPEND IBPP_SOURCE_LIST
         ${SOURCEDIR}/ibpp/fb1/service1.cpp
         ${SOURCEDIR}/ibpp/fb1/statement1.cpp
         ${SOURCEDIR}/ibpp/fb1/transaction1.cpp
+        ${SOURCEDIR}/ibpp/fb3/_dpb3.cpp
+        ${SOURCEDIR}/ibpp/fb3/array3.cpp
+        ${SOURCEDIR}/ibpp/fb3/blob3.cpp
+        ${SOURCEDIR}/ibpp/fb3/database3.cpp
+        ${SOURCEDIR}/ibpp/fb3/events3.cpp
+        ${SOURCEDIR}/ibpp/fb3/factories3.cpp
+        ${SOURCEDIR}/ibpp/fb3/row3.cpp
+        ${SOURCEDIR}/ibpp/fb3/service3.cpp
+        ${SOURCEDIR}/ibpp/fb3/statement3.cpp
+        ${SOURCEDIR}/ibpp/fb3/transaction3.cpp
         ${SOURCEDIR}/ibpp/fbinterfaces.cpp
         ${SOURCEDIR}/ibpp/ibint128.cpp
         ${SOURCEDIR}/ibpp/time.cpp
@@ -359,7 +369,9 @@ list(APPEND IBPP_HEADER_LIST
 		${SOURCEDIR}/firebird/include/firebird/Interface.h
 		${SOURCEDIR}/firebird/include/firebird/IdlFbInterfaces.h
         ${SOURCEDIR}/ibpp/_ibpp.h
+        ${SOURCEDIR}/ibpp/_ibppapi.h
         ${SOURCEDIR}/ibpp/fb1/ibppfb1.h
+        ${SOURCEDIR}/ibpp/fb3/ibppfb3.h
         ${SOURCEDIR}/ibpp/ibpp.h
 )
 

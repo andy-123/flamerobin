@@ -13,7 +13,6 @@
     under the License.
 */
 
-
 #ifdef _MSC_VER
 #pragma warning(disable: 4786 4996)
 #ifndef _DEBUG
@@ -23,6 +22,7 @@
 
 #include "_ibpp.h"
 #include "fb1/ibppfb1.h"
+#include "fb3/ibppfb3.h"
 
 #ifdef HAS_HDRSTOP
 #pragma hdrstop
@@ -278,7 +278,9 @@ FBCLIENT* FBCLIENT::Call()
 
 #endif
 
-
+#ifdef FIXME
+todo makros aus _ibppapi.h verwenden
+#endif
 		// Get the entry points that we need
 
 #ifdef IBPP_WINDOWS
@@ -288,9 +290,6 @@ FBCLIENT* FBCLIENT::Call()
 #define FB_ENTRYPOINT(X) \
             if ((m_##X = (proto_##X*)GetProcAddress(mHandle, "fb_"#X)) == 0) \
                 throw LogicExceptionImpl("FBCLIENT:gds()", _("Entry-point fb_"#X" not found"))
-#define FB_ENTRYPOINT_NOTHROW(X) \
-            if ((m_##X = (proto_##X*)GetProcAddress(mHandle, "fb_"#X)) == 0) \
-                m_##X = NULL;
 #endif
 #ifdef IBPP_UNIX
 #ifdef IBPP_LATE_BIND
@@ -304,9 +303,6 @@ FBCLIENT* FBCLIENT::Call()
 #define IB_ENTRYPOINT(X) m_##X = (proto_##X*)isc_##X
 #define FB_ENTRYPOINT(X) m_##X = (proto_##X*)fb_##X
 #endif
-#define FB_ENTRYPOINT_NOTHROW(X) \
-    if ((m_##X = (proto_##X*)dlsym(mHandle,"fb_"#X)) == 0) \
-        m_##X = NULL;
 #endif
 
 		IB_ENTRYPOINT(create_database);
@@ -356,13 +352,12 @@ FBCLIENT* FBCLIENT::Call()
 		IB_ENTRYPOINT(service_start);
 		IB_ENTRYPOINT(service_query);
 
-		FB_ENTRYPOINT_NOTHROW(get_master_interface);
-
-        if (m_get_master_interface == nullptr)
+        mFactories = nullptr;
+        if (FactoriesImplFb3::gInit(mHandle))
+            mFactories = new FactoriesImplFb3();
+        else if (FactoriesImplFb1::gInit(mHandle))
             mFactories = new FactoriesImplFb1();
-        else
-            // TODO implement and use factories for fb3+
-            mFactories = new FactoriesImplFb1();
+        else throw LogicExceptionImpl("FBCLIENT:gds()", _("No class factory available!"));
 
 		mReady = true;
 	}

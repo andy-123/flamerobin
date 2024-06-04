@@ -69,3 +69,19 @@ Events FactoriesImplFb1::CreateEvents(Database db)
     return new EventsImplFb1(
         dynamic_cast<DatabaseImplFb1*>(db.intf()));
 }
+
+// ***** STATIC *****
+bool FactoriesImplFb1::gIsInit = false;
+bool FactoriesImplFb1::gAvailable = false;
+
+bool FactoriesImplFb1::gInit(ibpp_HMODULE h)
+{
+    if (gIsInit)
+        return gAvailable;
+    #ifdef FIXME
+    move api to here (from _ibpp.cpp)
+    #endif
+    gAvailable = true;
+    gIsInit = true;
+    return gAvailable;
+}

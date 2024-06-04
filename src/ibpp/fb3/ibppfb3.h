@@ -17,50 +17,54 @@
   License for the specific language governing rights and limitations
   under the License.
 */
-#ifndef __INTERNAL_IBPPFB1_H__
-#define __INTERNAL_IBPPFB1_H__
+#ifndef __INTERNAL_IBPPFB3_H__
+#define __INTERNAL_IBPPFB3_H__
 
 #include "_ibpp.h"
 
-class DatabaseImplFb1;
-class TransactionImplFb1;
-class StatementImplFb1;
-class BlobImplFb1;
-class ArrayImplFb1;
-class EventsImplFb1;
+// Firebird 3+ interfaces
+#include "../firebird/include/firebird/Interface.h"
+
+class DatabaseImplFb3;
+class TransactionImplFb3;
+class StatementImplFb3;
+class BlobImplFb3;
+class ArrayImplFb3;
+class EventsImplFb3;
 
 using namespace ibpp_internals;
 using namespace IBPP;
+using namespace Firebird;
 
 //
 //  Database Parameter Block (used to define a database)
 //
 
-class DPBFb1
+class DPBFb3
 {
     static const int BUFFERINCR;
 
-    char* mBuffer;              // Dynamically allocated DPB structure
-    int mSize;                  // Its used size in bytes
-    int mAlloc;                 // Its allocated size in bytes
-
+    // Dynamically allocated DPB structure
+    IXpbBuilder* mDPB;
+    ThrowStatusWrapper* mStatus;
     void Grow(int needed);      // Allocate or grow the mBuffer, so that
                                 // 'needed' bytes can be written (at least)
 
 public:
-    void Insert(char, const char*); // Insert a new char* 'cluster'
-    void Insert(char, int16_t);     // Insert a new int16_t 'cluster'
-    void Insert(char, bool);        // Insert a new bool 'cluster'
-    void Insert(char, char);        // Insert a new byte 'cluster'
-    void Reset();               // Clears the DPB
-    char* Self() { return mBuffer; }
-    short Size() { return (short)mSize; }
+    void InsertString(unsigned char tag, const char* str);
+    //void Insert(char, int16_t);
+    void InsertBool(unsigned char tag, bool data);
+    //void Insert(char, char);
 
-    DPBFb1() : mBuffer(0), mSize(0), mAlloc(0) { }
-    ~DPBFb1() { Reset(); }
+    void Clear();               
+    const unsigned char* GetBuffer();
+    unsigned GetBufferLength();
+
+    DPBFb3();
+    ~DPBFb3();
 };
 
-class ServiceImplFb1 : public IBPP::IService
+class ServiceImplFb3 : public IBPP::IService
 {
     //  (((((((( OBJECT INTERNALS ))))))))
 
@@ -90,11 +94,11 @@ private:
 public:
     isc_svc_handle GetHandle() { return mHandle; }
 
-    ServiceImplFb1(const std::string& ServerName, const std::string& UserName,
+    ServiceImplFb3(const std::string& ServerName, const std::string& UserName,
                 const std::string& UserPassword, const std::string& RoleName,
                 const std::string& CharSet
         );
-    ~ServiceImplFb1();
+    ~ServiceImplFb3();
     FBCLIENT getGDS() const { return gds; };
 
     //  (((((((( OBJECT INTERFACE ))))))))
@@ -143,12 +147,14 @@ public:
     void Wait();
 };
 
-class DatabaseImplFb1 : public IBPP::IDatabase
+class DatabaseImplFb3 : public IBPP::IDatabase
 {
     //  (((((((( OBJECT INTERNALS ))))))))
 
     FBCLIENT gdsM;	// Local GDS instance
 
+    CheckStatusWrapper* mStatus;
+    IAttachment* mAtm;
     isc_db_handle mHandle;      // InterBase API Session Handle
     std::string mServerName;    // Server name
     std::string mDatabaseName;  // Database name (path/file)
@@ -159,32 +165,34 @@ class DatabaseImplFb1 : public IBPP::IDatabase
     std::string mCreateParams;  // Other parameters (creation only)
 
     int mDialect;                           // 1 if IB5, 1 or 3 if IB6/FB1
-    std::vector<TransactionImplFb1*> mTransactions;// Table of Transaction*
-    std::vector<StatementImplFb1*> mStatements;// Table of Statement*
-    std::vector<BlobImplFb1*> mBlobs;          // Table of Blob*
-    std::vector<ArrayImplFb1*> mArrays;        // Table of Array*
-    std::vector<EventsImplFb1*> mEvents;       // Table of Events*
+    std::vector<TransactionImplFb3*> mTransactions;// Table of Transaction*
+    std::vector<StatementImplFb3*> mStatements;// Table of Statement*
+    std::vector<BlobImplFb3*> mBlobs;          // Table of Blob*
+    std::vector<ArrayImplFb3*> mArrays;        // Table of Array*
+    std::vector<EventsImplFb3*> mEvents;       // Table of Events*
 
 public:
     isc_db_handle* GetHandlePtr() { return &mHandle; }
-    isc_db_handle GetHandle() { return mHandle; }
+    // array-functions has no interface - to support this
+    // we need the old isc_db_handle
+    isc_db_handle GetHandle();
 
-    void AttachTransactionImpl(TransactionImplFb1*);
-    void DetachTransactionImpl(TransactionImplFb1*);
-    void AttachStatementImpl(StatementImplFb1*);
-    void DetachStatementImpl(StatementImplFb1*);
-    void AttachBlobImpl(BlobImplFb1*);
-    void DetachBlobImpl(BlobImplFb1*);
-    void AttachArrayImpl(ArrayImplFb1*);
-    void DetachArrayImpl(ArrayImplFb1*);
-    void AttachEventsImpl(EventsImplFb1*);
-    void DetachEventsImpl(EventsImplFb1*);
+    void AttachTransactionImpl(TransactionImplFb3*);
+    void DetachTransactionImpl(TransactionImplFb3*);
+    void AttachStatementImpl(StatementImplFb3*);
+    void DetachStatementImpl(StatementImplFb3*);
+    void AttachBlobImpl(BlobImplFb3*);
+    void DetachBlobImpl(BlobImplFb3*);
+    void AttachArrayImpl(ArrayImplFb3*);
+    void DetachArrayImpl(ArrayImplFb3*);
+    void AttachEventsImpl(EventsImplFb3*);
+    void DetachEventsImpl(EventsImplFb3*);
 
-    DatabaseImplFb1(const std::string& ServerName, const std::string& DatabaseName,
+    DatabaseImplFb3(const std::string& ServerName, const std::string& DatabaseName,
                 const std::string& UserName, const std::string& UserPassword,
                 const std::string& RoleName, const std::string& CharSet,
                 const std::string& CreateParams);
-    ~DatabaseImplFb1();
+    ~DatabaseImplFb3();
     FBCLIENT getGDS() const { return gds; };
 
     //  (((((((( OBJECT INTERFACE ))))))))
@@ -212,24 +220,24 @@ public:
 
     void Create(int dialect);
     void Connect();
-    bool Connected() { return mHandle == 0 ? false : true; }
+    bool Connected() { return mAtm == nullptr ? false : true; }
     void Inactivate();
     void Disconnect();
     void Drop();
     IBPP::IDatabase* Clone();
 };
 
-class TransactionImplFb1 : public IBPP::ITransaction
+class TransactionImplFb3 : public IBPP::ITransaction
 {
     //  (((((((( OBJECT INTERNALS ))))))))
 
 private:
     isc_tr_handle mHandle;          // Transaction InterBase
 
-    std::vector<DatabaseImplFb1*> mDatabases;      // Table of IDatabase*
-    std::vector<StatementImplFb1*> mStatements;    // Table of IStatement*
-    std::vector<BlobImplFb1*> mBlobs;              // Table of IBlob*
-    std::vector<ArrayImplFb1*> mArrays;            // Table of Array*
+    std::vector<DatabaseImplFb3*> mDatabases;      // Table of IDatabase*
+    std::vector<StatementImplFb3*> mStatements;    // Table of IStatement*
+    std::vector<BlobImplFb3*> mBlobs;              // Table of IBlob*
+    std::vector<ArrayImplFb3*> mArrays;            // Table of Array*
     std::vector<TPB*> mTPBs;                    // Table of TPB
 
     void Init();            // A usage exclusif des constructeurs
@@ -238,21 +246,21 @@ public:
     isc_tr_handle* GetHandlePtr() { return &mHandle; }
     isc_tr_handle GetHandle() { return mHandle; }
 
-    void AttachStatementImpl(StatementImplFb1*);
-    void DetachStatementImpl(StatementImplFb1*);
-    void AttachBlobImpl(BlobImplFb1*);
-    void DetachBlobImpl(BlobImplFb1*);
-    void AttachArrayImpl(ArrayImplFb1*);
-    void DetachArrayImpl(ArrayImplFb1*);
-    void AttachDatabaseImpl(DatabaseImplFb1* dbi, IBPP::TAM am = IBPP::amWrite,
+    void AttachStatementImpl(StatementImplFb3*);
+    void DetachStatementImpl(StatementImplFb3*);
+    void AttachBlobImpl(BlobImplFb3*);
+    void DetachBlobImpl(BlobImplFb3*);
+    void AttachArrayImpl(ArrayImplFb3*);
+    void DetachArrayImpl(ArrayImplFb3*);
+    void AttachDatabaseImpl(DatabaseImplFb3* dbi, IBPP::TAM am = IBPP::amWrite,
             IBPP::TIL il = IBPP::ilConcurrency,
             IBPP::TLR lr = IBPP::lrWait, IBPP::TFF flags = IBPP::TFF(0));
-    void DetachDatabaseImpl(DatabaseImplFb1* dbi);
+    void DetachDatabaseImpl(DatabaseImplFb3* dbi);
 
-    TransactionImplFb1(DatabaseImplFb1* db, IBPP::TAM am = IBPP::amWrite,
+    TransactionImplFb3(DatabaseImplFb3* db, IBPP::TAM am = IBPP::amWrite,
         IBPP::TIL il = IBPP::ilConcurrency,
         IBPP::TLR lr = IBPP::lrWait, IBPP::TFF flags = IBPP::TFF(0));
-    ~TransactionImplFb1();
+    ~TransactionImplFb3();
 
     FBCLIENT getGDS() const { return gds; };
 
@@ -274,7 +282,7 @@ public:
     void RollbackRetain();
 };
 
-class RowImplFb1 : public IBPP::IRow
+class RowImplFb3 : public IBPP::IRow
 {
     //  (((((((( OBJECT INTERNALS ))))))))
 
@@ -290,8 +298,8 @@ private:
     std::vector<bool> mUpdated;     // Which columns where updated (Set()) ?
 
     int mDialect;                   // Related database dialect
-    DatabaseImplFb1* mDatabase;        // Related Database (important for Blobs, ...)
-    TransactionImplFb1* mTransaction;  // Related Transaction (same remark)
+    DatabaseImplFb3* mDatabase;        // Related Database (important for Blobs, ...)
+    TransactionImplFb3* mTransaction;  // Related Transaction (same remark)
 
     void SetValue(int, IITYPE, const void* value, int = 0);
     void* GetValue(int, IITYPE, void* = 0);
@@ -304,10 +312,10 @@ public:
     bool MissingValues();       // Returns wether one of the mMissing[] is true
     XSQLDA* Self() { return mDescrArea; }
 
-    RowImplFb1& operator=(const RowImplFb1& copied);
-    RowImplFb1(const RowImplFb1& copied);
-    RowImplFb1(int dialect, int size, DatabaseImplFb1* db, TransactionImplFb1* tr);
-    ~RowImplFb1();
+    RowImplFb3& operator=(const RowImplFb3& copied);
+    RowImplFb3(const RowImplFb3& copied);
+    RowImplFb3(int dialect, int size, DatabaseImplFb3* db, TransactionImplFb3* tr);
+    ~RowImplFb3();
 
     //  (((((((( OBJECT INTERFACE ))))))))
 
@@ -390,20 +398,20 @@ public:
     IBPP::IRow* Clone();
 };
 
-class StatementImplFb1 : public IBPP::IStatement
+class StatementImplFb3 : public IBPP::IStatement
 {
     //  (((((((( OBJECT INTERNALS ))))))))
 
 private:
-    friend class TransactionImplFb1;
+    friend class TransactionImplFb3;
 
     isc_stmt_handle mHandle;    // Statement Handle
 
-    DatabaseImplFb1* mDatabase;        // Attached database
-    TransactionImplFb1* mTransaction;  // Attached transaction
-    RowImplFb1* mInRow;
+    DatabaseImplFb3* mDatabase;        // Attached database
+    TransactionImplFb3* mTransaction;  // Attached transaction
+    RowImplFb3* mInRow;
     //bool* mInMissing;         // Quels paramètres n'ont pas été spécifiés
-    RowImplFb1* mOutRow;
+    RowImplFb3* mOutRow;
     bool mResultSetAvailable;   // Executed and result set is available
     bool mCursorOpened;         // dsql_set_cursor_name was called
     IBPP::STT mType;            // Type de requète
@@ -416,13 +424,13 @@ public:
     // Properties and Attributes Access Methods
     isc_stmt_handle GetHandle() { return mHandle; }
 
-    void AttachDatabaseImpl(DatabaseImplFb1*);
+    void AttachDatabaseImpl(DatabaseImplFb3*);
     void DetachDatabaseImpl();
-    void AttachTransactionImpl(TransactionImplFb1*);
+    void AttachTransactionImpl(TransactionImplFb3*);
     void DetachTransactionImpl();
 
-    StatementImplFb1(DatabaseImplFb1*, TransactionImplFb1*);
-    ~StatementImplFb1();
+    StatementImplFb3(DatabaseImplFb3*, TransactionImplFb3*);
+    ~StatementImplFb3();
     FBCLIENT getGDS() const { return mDatabase->getGDS(); };
 
     //  (((((((( OBJECT INTERFACE ))))))))
@@ -560,33 +568,33 @@ public:
     IBPP::Transaction TransactionPtr() const;
 };
 
-class BlobImplFb1 : public IBPP::IBlob
+class BlobImplFb3 : public IBPP::IBlob
 {
     //  (((((((( OBJECT INTERNALS ))))))))
 
 private:
-    friend class RowImplFb1;
+    friend class RowImplFb3;
 
     bool                    mIdAssigned;
     ISC_QUAD                mId;
     isc_blob_handle         mHandle;
     bool                    mWriteMode;
-    DatabaseImplFb1*        mDatabase;      // Belongs to this database
-    TransactionImplFb1*     mTransaction;   // Belongs to this transaction
+    DatabaseImplFb3*        mDatabase;      // Belongs to this database
+    TransactionImplFb3*     mTransaction;   // Belongs to this transaction
 
     void Init();
     void SetId(ISC_QUAD*);
     void GetId(ISC_QUAD*);
 
 public:
-    void AttachDatabaseImpl(DatabaseImplFb1*);
+    void AttachDatabaseImpl(DatabaseImplFb3*);
     void DetachDatabaseImpl();
-    void AttachTransactionImpl(TransactionImplFb1*);
+    void AttachTransactionImpl(TransactionImplFb3*);
     void DetachTransactionImpl();
 
-    BlobImplFb1(const BlobImplFb1&);
-    BlobImplFb1(DatabaseImplFb1*, TransactionImplFb1* = 0);
-    ~BlobImplFb1();
+    BlobImplFb3(const BlobImplFb3&);
+    BlobImplFb3(DatabaseImplFb3*, TransactionImplFb3* = 0);
+    ~BlobImplFb3();
     FBCLIENT getGDS() const { return mDatabase->getGDS(); };
 
     //  (((((((( OBJECT INTERFACE ))))))))
@@ -607,19 +615,19 @@ public:
     IBPP::Transaction TransactionPtr() const;
 };
 
-class ArrayImplFb1 : public IBPP::IArray
+class ArrayImplFb3 : public IBPP::IArray
 {
     //  (((((((( OBJECT INTERNALS ))))))))
 
 private:
-    friend class RowImplFb1;
+    friend class RowImplFb3;
 
     bool                mIdAssigned;
     ISC_QUAD            mId;
     bool                mDescribed;
     ISC_ARRAY_DESC      mDesc;
-    DatabaseImplFb1*    mDatabase;      // Database attachée
-    TransactionImplFb1* mTransaction;   // Transaction attachée
+    DatabaseImplFb3*    mDatabase;      // Database attachée
+    TransactionImplFb3* mTransaction;   // Transaction attachée
     void*               mBuffer;        // Buffer for native data
     int                 mBufferSize;    // Size of this buffer in bytes
     int                 mElemCount;     // Count of elements in this array
@@ -632,14 +640,14 @@ private:
     void AllocArrayBuffer();
 
 public:
-    void AttachDatabaseImpl(DatabaseImplFb1*);
+    void AttachDatabaseImpl(DatabaseImplFb3*);
     void DetachDatabaseImpl();
-    void AttachTransactionImpl(TransactionImplFb1*);
+    void AttachTransactionImpl(TransactionImplFb3*);
     void DetachTransactionImpl();
 
-    ArrayImplFb1(const ArrayImplFb1&);
-    ArrayImplFb1(DatabaseImplFb1*, TransactionImplFb1* = 0);
-    ~ArrayImplFb1();
+    ArrayImplFb3(const ArrayImplFb3&);
+    ArrayImplFb3(DatabaseImplFb3*, TransactionImplFb3* = 0);
+    ~ArrayImplFb3();
     FBCLIENT getGDS() const { return mDatabase->getGDS(); };
 
     //  (((((((( OBJECT INTERFACE ))))))))
@@ -660,20 +668,20 @@ public:
 };
 
 //
-//  EventBufferIterator: used in EventsImplFb1 + EventsImplFb3 implementation.
+//  EventBufferIterator: used in EventsImpl implementation.
 //
 
 template<class It>
-struct EventBufferIteratorFb1
+struct EventBufferIteratorFb3
 {
     It mIt;
 
 public:
-    EventBufferIteratorFb1& operator++()
+    EventBufferIteratorFb3& operator++()
         { mIt += 1 + static_cast<int>(*mIt) + 4; return *this; }
 
-    bool operator == (const EventBufferIteratorFb1& i) const { return i.mIt == mIt; }
-    bool operator != (const EventBufferIteratorFb1& i) const { return i.mIt != mIt; }
+    bool operator == (const EventBufferIteratorFb3& i) const { return i.mIt == mIt; }
+    bool operator != (const EventBufferIteratorFb3& i) const { return i.mIt != mIt; }
 
     std::string get_name() const
     {
@@ -690,11 +698,11 @@ public:
     It begin()  { return mIt; }
     It end()    { return mIt + 1 + static_cast<int>(*mIt) + 4; }
 
-    EventBufferIteratorFb1() {}
-    EventBufferIteratorFb1(It it) : mIt(it) {}
+    EventBufferIteratorFb3() {}
+    EventBufferIteratorFb3(It it) : mIt(it) {}
 };
 
-class EventsImplFb1 : public IBPP::IEvents
+class EventsImplFb3 : public IBPP::IEvents
 {
     static const size_t MAXEVENTNAMELEN;
     static void EventHandler(const char*, short, const char*);
@@ -706,7 +714,7 @@ class EventsImplFb1 : public IBPP::IEvents
     Buffer mEventBuffer;
     Buffer mResultsBuffer;
 
-    DatabaseImplFb1* mDatabase;
+    DatabaseImplFb3* mDatabase;
     ISC_LONG mId;           // Firebird internal Id of these events
     bool mQueued;           // Has isc_que_events() been called?
     bool mTrapped;          // EventHandled() was called since last que_events()
@@ -715,15 +723,15 @@ class EventsImplFb1 : public IBPP::IEvents
     void Queue();
     void Cancel();
 
-    EventsImplFb1& operator=(const EventsImplFb1&);
-    EventsImplFb1(const EventsImplFb1&);
+    EventsImplFb3& operator=(const EventsImplFb3&);
+    EventsImplFb3(const EventsImplFb3&);
 
 public:
-    void AttachDatabaseImpl(DatabaseImplFb1*);
+    void AttachDatabaseImpl(DatabaseImplFb3*);
     void DetachDatabaseImpl();
 
-    EventsImplFb1(DatabaseImplFb1* dbi);
-    ~EventsImplFb1();
+    EventsImplFb3(DatabaseImplFb3* dbi);
+    ~EventsImplFb3();
     FBCLIENT getGDS() const { return mDatabase->getGDS(); };
 
 
@@ -739,10 +747,10 @@ public:
     IBPP::Database DatabasePtr() const;
 };
 
-class FactoriesImplFb1 : public IFactories
+class FactoriesImplFb3 : public IFactories
 {
 public:
-    FactoriesImplFb1() {};
+    FactoriesImplFb3() {};
     Service CreateService(const std::string& ServerName,
         const std::string& UserName, const std::string& UserPassword,
         const std::string& RoleName, const std::string& CharSet,
@@ -763,6 +771,9 @@ private:
     static bool gIsInit;
     static bool gAvailable;
 public:
+    static proto_get_database_handle* m_get_database_handle;
+    static IMaster* gMaster;
+    static IUtil* gUtil;
     static bool gInit(ibpp_HMODULE h);
 };
 

@@ -24,83 +24,74 @@
 #endif
 #endif
 
-#include "_ibpp.h"
+#include "fb3/ibppfb3.h"
 
 #ifdef HAS_HDRSTOP
 #pragma hdrstop
 #endif
 
 using namespace ibpp_internals;
+using namespace Firebird;
 
-const int DPB::BUFFERINCR = 128;
+const int DPBFb3::BUFFERINCR = 128;
 
-void DPB::Grow(int needed)
+void DPBFb3::Clear()
 {
-	if (mBuffer == 0) ++needed;	// Initial alloc will require one more byte
-	if ((mSize + needed) > mAlloc)
-	{
-		// We need to grow the buffer. We use increments of BUFFERINCR bytes.
-		needed = (needed / BUFFERINCR + 1) * BUFFERINCR;
-		char* newbuffer = new char[mAlloc + needed];
-		if (mBuffer == 0)
-		{
-			// Initial allocation, initialize the version tag
-			newbuffer[0] = isc_dpb_version1;
-			mSize = 1;
-		}
-		else
-		{
-			// Move the old buffer content to the new one
-			memcpy(newbuffer, mBuffer, mSize);
-			delete [] mBuffer;
-		}
-		mBuffer = newbuffer;
-		mAlloc += needed;
-	}
+    mDPB->clear(mStatus);
 }
 
-void DPB::Insert(char type, const char* data)
+const unsigned char* DPBFb3::GetBuffer()
 {
-	int len = (int)strlen(data);
-	Grow(len + 2);
-    mBuffer[mSize++] = type;
-	mBuffer[mSize++] = char(len);
-    strncpy(&mBuffer[mSize], data, len);
-    mSize += len;
+    return mDPB->getBuffer(mStatus);
 }
 
-void DPB::Insert(char type, int16_t data)
+unsigned DPBFb3::GetBufferLength()
 {
+    return mDPB->getBufferLength(mStatus);
+}
+
+void DPBFb3::InsertString(unsigned char tag, const char* str)
+{
+    mDPB->insertString(mStatus, tag, str);
+}
+
+/*void DPBFb3::Insert(char type, int16_t data)
+{
+    #ifdef FIXME
 	Grow(2 + 2);
     mBuffer[mSize++] = type;
 	mBuffer[mSize++] = char(2);
     *(int16_t*)&mBuffer[mSize] = int16_t((*gds.Call()->m_vax_integer)((char*)&data, 2));
     mSize += 2;
+    #endif
+}*/
+
+void DPBFb3::InsertBool(unsigned char tag, bool data)
+{
+    unsigned char value = (unsigned char)data;
+    mDPB->insertBytes(mStatus, tag, &value, sizeof(value));
 }
 
-void DPB::Insert(char type, bool data)
+/*void DPBFb3::Insert(char type, char data)
 {
-	Grow(2 + 1);
-    mBuffer[mSize++] = type;
-	mBuffer[mSize++] = char(1);
-    mBuffer[mSize++] = char(data ? 1 : 0);
-}
-
-void DPB::Insert(char type, char data)
-{
+    #ifdef FIXME
 	Grow(2 + 1);
     mBuffer[mSize++] = type;
 	mBuffer[mSize++] = char(1);
     mBuffer[mSize++] = data;
+    #endif
+}*/
+
+DPBFb3::DPBFb3()
+{
+    IMaster* master = FactoriesImplFb3::gMaster;
+    IUtil* util = FactoriesImplFb3::gUtil;
+
+    mStatus = new ThrowStatusWrapper(master->getStatus());
+    mDPB = util->getXpbBuilder(mStatus, IXpbBuilder::DPB, NULL, 0);
 }
 
-void DPB::Reset()
+DPBFb3::~DPBFb3()
 {
-	if (mAlloc != 0)
-    {
-    	delete [] mBuffer;
-        mBuffer = 0;
-        mSize = 0;
-		mAlloc = 0;
-    }
+    delete mStatus;
 }

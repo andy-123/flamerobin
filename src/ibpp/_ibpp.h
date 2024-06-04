@@ -21,6 +21,7 @@
 #define __INTERNAL_IBPP_H__
 
 #include "ibpp.h"
+#include "_ibppapi.h"
 
 #if defined(_MSC_VER) 
 #define HAS_HDRSTOP
@@ -38,6 +39,9 @@
 
 // From Firebird installation
 #include "../firebird/include/ibase.h"
+#ifdef FIXME
+sollte mal entfernt werden -> nach ibppfb3.h wandern
+#endif
 // Firebird 3+ interfaces
 #include "../firebird/include/firebird/Interface.h"
 
@@ -380,15 +384,17 @@ typedef void        ISC_EXPORT proto_encode_timestamp (void *,
                     ISC_TIMESTAMP *);
 
 //
-//  FB3+ / get master-interface (fb_get_master_interface)
-//
-typedef Firebird::IMaster* ISC_EXPORT proto_get_master_interface();
-
-//
 //  Internal binding structure to the FBCLIENT DLL
 //
 
 class IFactories;
+
+#ifdef IBPP_WINDOWS
+typedef HMODULE ibpp_HMODULE;
+#endif
+#ifdef IBPP_UNIX
+typedef void* ibpp_HMODULE;
+#endif
 
 struct FBCLIENT
 {
@@ -396,13 +402,16 @@ struct FBCLIENT
     bool mReady;
     std::string mfbdll;
 
+    // The FBCLIENT.DLL HMODULE
+    ibpp_HMODULE mHandle;
+
 #ifdef IBPP_WINDOWS
-    HMODULE mHandle;            // The FBCLIENT.DLL HMODULE
     std::string mSearchPaths;   // Optional additional search paths
 #endif
-#ifdef IBPP_UNIX
-    void *mHandle;
-#endif
+
+    #ifdef FIXME
+    nach FactoriesImplFb1::Init verschieben
+    #endif
 
     IFactories* mFactories;
 
@@ -469,8 +478,6 @@ struct FBCLIENT
     //proto_encode_sql_time*            m_encode_sql_time;
     //proto_encode_timestamp*           m_encode_timestamp;
 
-    proto_get_master_interface*     m_get_master_interface;
-
     // Constructor (No need for a specific destructor)
     FBCLIENT()
     {
@@ -509,34 +516,6 @@ public:
 
     SPB() : mBuffer(0), mSize(0), mAlloc(0) { }
     ~SPB() { Reset(); }
-};
-
-//
-//  Database Parameter Block (used to define a database)
-//
-
-class DPB
-{
-    static const int BUFFERINCR;
-
-    char* mBuffer;              // Dynamically allocated DPB structure
-    int mSize;                  // Its used size in bytes
-    int mAlloc;                 // Its allocated size in bytes
-
-    void Grow(int needed);      // Allocate or grow the mBuffer, so that
-                                // 'needed' bytes can be written (at least)
-
-public:
-    void Insert(char, const char*); // Insert a new char* 'cluster'
-    void Insert(char, int16_t);     // Insert a new int16_t 'cluster'
-    void Insert(char, bool);        // Insert a new bool 'cluster'
-    void Insert(char, char);        // Insert a new byte 'cluster'
-    void Reset();               // Clears the DPB
-    char* Self() { return mBuffer; }
-    short Size() { return (short)mSize; }
-
-    DPB() : mBuffer(0), mSize(0), mAlloc(0) { }
-    ~DPB() { Reset(); }
 };
 
 //
@@ -587,6 +566,9 @@ public:
 
     char* Self() { return mBuffer; }
     short Size() { return (short)mSize; }
+
+    unsigned char* GetBuffer() { return (unsigned char*)mBuffer; }
+    unsigned GetBufferLength() { return (unsigned)mSize; }
 
     RB();
     RB(int Size);
@@ -702,11 +684,16 @@ private:
     int mEngineCode;
 
 public:
+    #ifdef FIXME
+    SQL-Exception evtl. aufteilen in FB1/FB3
+    #endif
 
     SQLExceptionImpl() throw();
     SQLExceptionImpl(const SQLExceptionImpl& copied) throw();
     SQLExceptionImpl& operator=(const SQLExceptionImpl& copied) throw();
     SQLExceptionImpl(const IBS& status, const std::string& context,
+                        const char* message = 0, ...) throw();
+    SQLExceptionImpl(Firebird::IStatus* mStatus, const std::string& context,
                         const char* message = 0, ...) throw();
 
     virtual ~SQLExceptionImpl() throw ();

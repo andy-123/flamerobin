@@ -48,14 +48,19 @@ bool fbIntfClass::init(std::string& errmsg)
     if (mMaster != NULL)
         return true;
 
+    #ifdef FIXME
+
     if (gds.m_get_master_interface == NULL)
     {
         errmsg = "fb_get_master_interface is not present in fbclient.so/dll. "
                  "You need a fbclient 4.0+!";
         return false;
     }
+    #endif
     
+    #ifdef FIXME
     mMaster = gds.m_get_master_interface();
+    #endif
     mStatus = new Firebird::ThrowStatusWrapper(mMaster->getStatus());
     mUtil   = mMaster->getUtilInterface();
     return true;

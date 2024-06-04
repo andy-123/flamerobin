@@ -45,7 +45,7 @@ void IBaseRefCount<T>::Release()
     // Release cannot throw, except in DEBUG builds on assertion
     ASSERTION(mRefCount >= 0);
     --mRefCount;
-    try { if (mRefCount <= 0) delete this; }
+    try { if (mRefCount <= 0) delete (T*)this; }
         catch (...) { }
 }
 

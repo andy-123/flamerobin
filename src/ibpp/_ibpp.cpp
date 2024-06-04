@@ -22,6 +22,7 @@
 #endif
 
 #include "_ibpp.h"
+#include "fb1/ibppfb1.h"
 
 #ifdef HAS_HDRSTOP
 #pragma hdrstop
@@ -357,6 +358,12 @@ FBCLIENT* FBCLIENT::Call()
 
 		FB_ENTRYPOINT_NOTHROW(get_master_interface);
 
+        if (m_get_master_interface == nullptr)
+            mFactories = new FactoriesImplFb1();
+        else
+            // TODO implement and use factories for fb3+
+            mFactories = new FactoriesImplFb1();
+
 		mReady = true;
 	}
 
@@ -391,10 +398,9 @@ namespace IBPP
                 const std::string& RoleName, const std::string& CharSet,
                 const std::string& FBClient )
 	{
-        if (FBClient.length() != 0)
-            gds.mfbdll = FBClient;
-        (void)gds.Call();			// Triggers the initialization, if needed
-		return new ServiceImpl(ServerName, UserName, UserPassword, RoleName, CharSet);
+        gds.Call(); // Triggers the initialization, if needed
+        return gds.mFactories->CreateService(ServerName, UserName, UserPassword,
+            RoleName, CharSet, FBClient);
 	}
 
 	Database DatabaseFactory(const std::string& ServerName,
@@ -403,47 +409,40 @@ namespace IBPP
 		const std::string& CharSet, const std::string& CreateParams,
         const std::string& FBClient)
 	{
-        
-        if (FBClient.length() != 0)
-            gds.mfbdll = FBClient;
-		(void)gds.Call();			// Triggers the initialization, if needed
-		return new DatabaseImpl(ServerName, DatabaseName, UserName,
-								UserPassword, RoleName, CharSet, CreateParams);
+        gds.Call(); // Triggers the initialization, if needed
+        return gds.mFactories->CreateDatabase(ServerName, DatabaseName, UserName,
+            UserPassword, RoleName, CharSet, CreateParams);
 	}
 
 	Transaction TransactionFactory(Database db, TAM am,
 					TIL il, TLR lr, TFF flags)
 	{
-        (void)gds.Call();			// Triggers the initialization, if needed
-		return new TransactionImpl(	dynamic_cast<DatabaseImpl*>(db.intf()),
-									am, il, lr, flags);
+        gds.Call(); // Triggers the initialization, if needed
+        return gds.mFactories->CreateTransaction(db, am, il, lr, flags);
 	}
 
 	Statement StatementFactory(Database db, Transaction tr)
 	{
-        (void)gds.Call();			// Triggers the initialization, if needed
-		return new StatementImpl(	dynamic_cast<DatabaseImpl*>(db.intf()),
-									dynamic_cast<TransactionImpl*>(tr.intf()));
+        gds.Call(); // Triggers the initialization, if needed
+        return gds.mFactories->CreateStatement(db, tr);
 	}
 
 	Blob BlobFactory(Database db, Transaction tr)
 	{
-        (void)gds.Call();			// Triggers the initialization, if needed
-		return new BlobImpl(dynamic_cast<DatabaseImpl*>(db.intf()),
-							dynamic_cast<TransactionImpl*>(tr.intf()));
+        gds.Call(); // Triggers the initialization, if needed
+        return gds.mFactories->CreateBlob(db, tr);
 	}
 
 	Array ArrayFactory(Database db, Transaction tr)
 	{
-        (void)gds.Call();			// Triggers the initialization, if needed
-		return new ArrayImpl(dynamic_cast<DatabaseImpl*>(db.intf()),
-							dynamic_cast<TransactionImpl*>(tr.intf()));
+        gds.Call(); // Triggers the initialization, if needed
+        return gds.mFactories->CreateArray(db, tr);
 	}
 
 	Events EventsFactory(Database db)
 	{
-        (void)gds.Call();			// Triggers the initialization, if needed
-		return new EventsImpl(dynamic_cast<DatabaseImpl*>(db.intf()));
+        gds.Call(); // Triggers the initialization, if needed
+        return gds.mFactories->CreateEvents(db);
 	}
 
     bool isIntegerNumber(SDT type)

@@ -320,6 +320,7 @@ list(APPEND IBPP_SOURCE_LIST
         ${SOURCEDIR}/ibpp/fb1/blob1.cpp
         ${SOURCEDIR}/ibpp/fb1/database1.cpp
         ${SOURCEDIR}/ibpp/fb1/events1.cpp
+        ${SOURCEDIR}/ibpp/fb1/factories1.cpp
         ${SOURCEDIR}/ibpp/fb1/row1.cpp
         ${SOURCEDIR}/ibpp/fb1/service1.cpp
         ${SOURCEDIR}/ibpp/fb1/statement1.cpp
@@ -358,6 +359,7 @@ list(APPEND IBPP_HEADER_LIST
 		${SOURCEDIR}/firebird/include/firebird/Interface.h
 		${SOURCEDIR}/firebird/include/firebird/IdlFbInterfaces.h
         ${SOURCEDIR}/ibpp/_ibpp.h
+        ${SOURCEDIR}/ibpp/fb1/ibppfb1.h
         ${SOURCEDIR}/ibpp/ibpp.h
 )
 

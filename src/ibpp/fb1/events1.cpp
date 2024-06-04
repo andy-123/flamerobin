@@ -1,4 +1,4 @@
-//	Subject : IBPP, internal EventsImpl class implementation
+//	Subject : IBPP, internal EventsImplFb1 class implementation
 //
 //	COMMENTS
 //
@@ -48,6 +48,7 @@
 #endif
 
 #include "_ibpp.h"
+#include "fb1/ibppfb1.h"
 
 #ifdef HAS_HDRSTOP
 #pragma hdrstop
@@ -55,11 +56,11 @@
 
 using namespace ibpp_internals;
 
-const size_t EventsImpl::MAXEVENTNAMELEN = 127;
+const size_t EventsImplFb1::MAXEVENTNAMELEN = 127;
 
 //	(((((((( OBJECT INTERFACE IMPLEMENTATION ))))))))
 
-void EventsImpl::Add(const std::string& eventname, IBPP::EventInterface* objref)
+void EventsImplFb1::Add(const std::string& eventname, IBPP::EventInterface* objref)
 {
 	if (eventname.size() == 0)
 		throw LogicExceptionImpl("Events::Add", _("Zero length event names not permitted"));
@@ -104,19 +105,19 @@ void EventsImpl::Add(const std::string& eventname, IBPP::EventInterface* objref)
 	Queue();
 }
 
-void EventsImpl::Drop(const std::string& eventname)
+void EventsImplFb1::Drop(const std::string& eventname)
 {
 	if (eventname.size() == 0)
-		throw LogicExceptionImpl("EventsImpl::Drop", _("Zero length event names not permitted"));
+		throw LogicExceptionImpl("EventsImplFb1::Drop", _("Zero length event names not permitted"));
 	if (eventname.size() > MAXEVENTNAMELEN)
-		throw LogicExceptionImpl("EventsImpl::Drop", _("Event name is too long"));
+		throw LogicExceptionImpl("EventsImplFb1::Drop", _("Event name is too long"));
 
 	if (mEventBuffer.size() <= 1) return;	// Nothing to do, but not an error
 
 	Cancel();
 
 	// 1) Find the event in the buffers
-	typedef EventBufferIterator<Buffer::iterator> EventIterator;
+	typedef EventBufferIteratorFb1<Buffer::iterator> EventIterator;
 	EventIterator eit(mEventBuffer.begin()+1);
 	EventIterator rit(mResultsBuffer.begin()+1);
 
@@ -125,7 +126,7 @@ void EventsImpl::Drop(const std::string& eventname)
 				++oit, ++eit, ++rit)
 	{
 		if (eventname != eit.get_name()) continue;
-		
+
 		// 2) Event found, remove it
 		mEventBuffer.erase(eit.begin(), eit.end());
 		mResultsBuffer.erase(rit.begin(), rit.end());
@@ -136,13 +137,13 @@ void EventsImpl::Drop(const std::string& eventname)
 	Queue();
 }
 
-void EventsImpl::List(std::vector<std::string>& events)
+void EventsImplFb1::List(std::vector<std::string>& events)
 {
 	events.clear();
-	
+
 	if (mEventBuffer.size() <= 1) return;	// Nothing to do, but not an error
 
-	typedef EventBufferIterator<Buffer::iterator> EventIterator;
+	typedef EventBufferIteratorFb1<Buffer::iterator> EventIterator;
 	EventIterator eit(mEventBuffer.begin()+1);
 
 	for (ObjRefs::iterator oit = mObjectReferences.begin();
@@ -153,16 +154,16 @@ void EventsImpl::List(std::vector<std::string>& events)
 	}
 }
 
-void EventsImpl::Clear()
+void EventsImplFb1::Clear()
 {
 	Cancel();
-	
+
 	mObjectReferences.clear();
 	mEventBuffer.clear();
 	mResultsBuffer.clear();
 }
 
-void EventsImpl::Dispatch()
+void EventsImplFb1::Dispatch()
 {
 	// If no events registered, nothing to do of course.
 	if (mEventBuffer.size() == 0) return;
@@ -172,7 +173,7 @@ void EventsImpl::Dispatch()
 	Queue();
 }
 
-IBPP::Database EventsImpl::DatabasePtr() const
+IBPP::Database EventsImplFb1::DatabasePtr() const
 {
 	if (mDatabase == 0) throw LogicExceptionImpl("Events::DatabasePtr",
 			_("No Database is attached."));
@@ -181,12 +182,12 @@ IBPP::Database EventsImpl::DatabasePtr() const
 
 //	(((((((( OBJECT INTERNAL METHODS ))))))))
 
-void EventsImpl::Queue()
+void EventsImplFb1::Queue()
 {
 	if (! mQueued)
 	{
 		if (mDatabase->GetHandle() == 0)
-			throw LogicExceptionImpl("EventsImpl::Queue",
+			throw LogicExceptionImpl("EventsImplFb1::Queue",
 				  _("Database is not connected"));
 
 		IBS vector;
@@ -200,17 +201,17 @@ void EventsImpl::Queue()
 		{
 			mId = 0;	// Should be, but better be safe
 			mQueued = false;
-			throw SQLExceptionImpl(vector, "EventsImpl::Queue",
+			throw SQLExceptionImpl(vector, "EventsImplFb1::Queue",
 				_("isc_que_events failed"));
 		}
 	}
 }
 
-void EventsImpl::Cancel()
+void EventsImplFb1::Cancel()
 {
 	if (mQueued)
 	{
-		if (mDatabase->GetHandle() == 0) throw LogicExceptionImpl("EventsImpl::Cancel",
+		if (mDatabase->GetHandle() == 0) throw LogicExceptionImpl("EventsImplFb1::Cancel",
 			_("Database is not connected"));
 
 		IBS vector;
@@ -226,7 +227,7 @@ void EventsImpl::Cancel()
 	    if (vector.Errors())
 		{
 			mQueued = true;	// Need to restore this as cancel failed
-	    	throw SQLExceptionImpl(vector, "EventsImpl::Cancel",
+	    	throw SQLExceptionImpl(vector, "EventsImplFb1::Cancel",
 	    		_("isc_cancel_events failed"));
 		}
 
@@ -234,11 +235,11 @@ void EventsImpl::Cancel()
 	}
 }
 
-void EventsImpl::FireActions()
+void EventsImplFb1::FireActions()
 {
 	if (mTrapped)
 	{
-		typedef EventBufferIterator<Buffer::iterator> EventIterator;
+		typedef EventBufferIteratorFb1<Buffer::iterator> EventIterator;
 		EventIterator eit(mEventBuffer.begin()+1);
 		EventIterator rit(mResultsBuffer.begin()+1);
 
@@ -248,7 +249,7 @@ void EventsImpl::FireActions()
 		{
 			if (eit == EventIterator(mEventBuffer.end())
 				  || rit == EventIterator(mResultsBuffer.end()))
-				throw LogicExceptionImpl("EventsImpl::FireActions", _("Internal buffer size error"));
+				throw LogicExceptionImpl("EventsImplFb1::FireActions", _("Internal buffer size error"));
 			uint32_t vnew = rit.get_count();
 			uint32_t vold = eit.get_count();
 			if (vnew > vold)
@@ -276,7 +277,7 @@ void EventsImpl::FireActions()
 // This function must keep this prototype to stay compatible with
 // what isc_que_events() expects
 
-void EventsImpl::EventHandler(const char* object, short size, const char* tmpbuffer)
+void EventsImplFb1::EventHandler(const char* object, short size, const char* tmpbuffer)
 {
 	// >>>>> This method is a STATIC member !! <<<<<
 	// Consider this method as a kind of "interrupt handler". It should do as
@@ -289,8 +290,8 @@ void EventsImpl::EventHandler(const char* object, short size, const char* tmpbuf
 	// There can be spurious calls to EventHandler from FB internal. We must
 	// dismiss those calls.
 	if (object == 0 || size == 0 || tmpbuffer == 0) return;
-		
-	EventsImpl* evi = (EventsImpl*)object;	// Ugly, but wanted, c-style cast
+
+	EventsImplFb1* evi = (EventsImplFb1*)object;	// Ugly, but wanted, c-style cast
 
 	if (evi->mQueued)
 	{
@@ -307,9 +308,9 @@ void EventsImpl::EventHandler(const char* object, short size, const char* tmpbuf
 	}
 }
 
-void EventsImpl::AttachDatabaseImpl(DatabaseImpl* database)
+void EventsImplFb1::AttachDatabaseImpl(DatabaseImplFb1* database)
 {
-	if (database == 0) throw LogicExceptionImpl("EventsImpl::AttachDatabase",
+	if (database == 0) throw LogicExceptionImpl("EventsImplFb1::AttachDatabase",
 			_("Can't attach a null Database object."));
 
 	if (mDatabase != 0) mDatabase->DetachEventsImpl(this);
@@ -317,7 +318,7 @@ void EventsImpl::AttachDatabaseImpl(DatabaseImpl* database)
 	mDatabase->AttachEventsImpl(this);
 }
 
-void EventsImpl::DetachDatabaseImpl()
+void EventsImplFb1::DetachDatabaseImpl()
 {
 	if (mDatabase == 0) return;
 
@@ -325,7 +326,7 @@ void EventsImpl::DetachDatabaseImpl()
 	mDatabase = 0;
 }
 
-EventsImpl::EventsImpl(DatabaseImpl* database)
+EventsImplFb1::EventsImplFb1(DatabaseImplFb1* database)
 {
 	mDatabase = 0;
 	mId = 0;
@@ -333,11 +334,11 @@ EventsImpl::EventsImpl(DatabaseImpl* database)
 	AttachDatabaseImpl(database);
 }
 
-EventsImpl::~EventsImpl()
+EventsImplFb1::~EventsImplFb1()
 {
 	try { Clear(); }
 		catch (...) { }
-	
+
 	try { if (mDatabase != 0) mDatabase->DetachEventsImpl(this); }
 		catch (...) { }
 }

@@ -21,6 +21,7 @@
 #endif
 
 #include "_ibpp.h"
+#include "fb1/ibppfb1.h"
 
 #ifdef HAS_HDRSTOP
 #pragma hdrstop
@@ -32,7 +33,7 @@ using namespace ibpp_internals;
 
 //  (((((((( OBJECT INTERFACE IMPLEMENTATION ))))))))
 
-void DatabaseImpl::Create(int dialect)
+void DatabaseImplFb1::Create(int dialect)
 {
     if (mHandle != 0)
         throw LogicExceptionImpl("Database::Create", _("Database is already connected."));
@@ -64,7 +65,7 @@ void DatabaseImpl::Create(int dialect)
     Disconnect();
 }
 
-void DatabaseImpl::Connect()
+void DatabaseImplFb1::Connect()
 {
     if (mHandle != 0) return;   // Already connected
 
@@ -138,7 +139,7 @@ void DatabaseImpl::Connect()
     }
 }
 
-void DatabaseImpl::Inactivate()
+void DatabaseImplFb1::Inactivate()
 {
     if (mHandle == 0) return;   // Not connected anyway
 
@@ -176,7 +177,7 @@ void DatabaseImpl::Inactivate()
         mEvents.back()->DetachDatabaseImpl();
 }
 
-void DatabaseImpl::Disconnect()
+void DatabaseImplFb1::Disconnect()
 {
     if (mHandle == 0) return;   // Not connected anyway
 
@@ -194,7 +195,7 @@ void DatabaseImpl::Disconnect()
         throw SQLExceptionImpl(status, "Database::Disconnect", _("isc_detach_database failed"));
 }
 
-void DatabaseImpl::Drop()
+void DatabaseImplFb1::Drop()
 {
     if (mHandle == 0)
         throw LogicExceptionImpl("Database::Drop", _("Database must be connected."));
@@ -210,16 +211,16 @@ void DatabaseImpl::Drop()
     mHandle = 0;
 }
 
-IBPP::IDatabase * DatabaseImpl::Clone()
+IBPP::IDatabase * DatabaseImplFb1::Clone()
 {
     // By definition the clone of an IBPP Database is a new Database.
-    DatabaseImpl* clone = new DatabaseImpl(mServerName, mDatabaseName,
+    DatabaseImplFb1* clone = new DatabaseImplFb1(mServerName, mDatabaseName,
         mUserName, mUserPassword, mRoleName,
         mCharSet, mCreateParams);
     return clone;
 }
 
-void DatabaseImpl::Info(int* ODSMajor, int* ODSMinor,
+void DatabaseImplFb1::Info(int* ODSMajor, int* ODSMinor,
     int* PageSize, int* Pages, int* Buffers, int* Sweep,
     bool* Sync, bool* Reserve, bool* ReadOnly)
 {
@@ -259,7 +260,7 @@ void DatabaseImpl::Info(int* ODSMajor, int* ODSMinor,
         *ReadOnly = result.GetValue(isc_info_db_read_only) == 1 ? true : false;
 }
 
-void DatabaseImpl::TransactionInfo(int* Oldest, int* OldestActive,
+void DatabaseImplFb1::TransactionInfo(int* Oldest, int* OldestActive,
     int* OldestSnapshot, int* Next)
 {
     if (mHandle == 0)
@@ -289,7 +290,7 @@ void DatabaseImpl::TransactionInfo(int* Oldest, int* OldestActive,
         *Next = result.GetValue(isc_info_next_transaction);
 }
 
-void DatabaseImpl::Statistics(int* Fetches, int* Marks, int* Reads, int* Writes, int* CurrentMemory)
+void DatabaseImplFb1::Statistics(int* Fetches, int* Marks, int* Reads, int* Writes, int* CurrentMemory)
 {
     if (mHandle == 0)
         throw LogicExceptionImpl("Database::Statistics", _("Database is not connected."));
@@ -316,7 +317,7 @@ void DatabaseImpl::Statistics(int* Fetches, int* Marks, int* Reads, int* Writes,
     if (CurrentMemory != 0) *CurrentMemory = result.GetValue(isc_info_current_memory);
 }
 
-void DatabaseImpl::Counts(int* Insert, int* Update, int* Delete,
+void DatabaseImplFb1::Counts(int* Insert, int* Update, int* Delete,
     int* ReadIdx, int* ReadSeq)
 {
     if (mHandle == 0)
@@ -344,7 +345,7 @@ void DatabaseImpl::Counts(int* Insert, int* Update, int* Delete,
     if (ReadSeq != 0) *ReadSeq = result.GetCountValue(isc_info_read_seq_count);
 }
 
-void DatabaseImpl::DetailedCounts(IBPP::DatabaseCounts& counts)
+void DatabaseImplFb1::DetailedCounts(IBPP::DatabaseCounts& counts)
 {
     if (mHandle == 0)
         throw LogicExceptionImpl("Database::DetailedCounts", _("Database is not connected."));
@@ -371,7 +372,7 @@ void DatabaseImpl::DetailedCounts(IBPP::DatabaseCounts& counts)
     result.GetDetailedCounts(counts, isc_info_read_seq_count);
 }
 
-void DatabaseImpl::Users(std::vector<std::string>& users)
+void DatabaseImplFb1::Users(std::vector<std::string>& users)
 {
     if (mHandle == 0)
         throw LogicExceptionImpl("Database::Users", _("Database is not connected."));
@@ -402,7 +403,7 @@ void DatabaseImpl::Users(std::vector<std::string>& users)
 
 //  (((((((( OBJECT INTERNAL METHODS ))))))))
 
-void DatabaseImpl::AttachTransactionImpl(TransactionImpl* tr)
+void DatabaseImplFb1::AttachTransactionImpl(TransactionImplFb1* tr)
 {
     if (tr == 0)
         throw LogicExceptionImpl("Database::AttachTransaction",
@@ -411,7 +412,7 @@ void DatabaseImpl::AttachTransactionImpl(TransactionImpl* tr)
     mTransactions.push_back(tr);
 }
 
-void DatabaseImpl::DetachTransactionImpl(TransactionImpl* tr)
+void DatabaseImplFb1::DetachTransactionImpl(TransactionImplFb1* tr)
 {
     if (tr == 0)
         throw LogicExceptionImpl("Database::DetachTransaction",
@@ -420,7 +421,7 @@ void DatabaseImpl::DetachTransactionImpl(TransactionImpl* tr)
     mTransactions.erase(std::find(mTransactions.begin(), mTransactions.end(), tr));
 }
 
-void DatabaseImpl::AttachStatementImpl(StatementImpl* st)
+void DatabaseImplFb1::AttachStatementImpl(StatementImplFb1* st)
 {
     if (st == 0)
         throw LogicExceptionImpl("Database::AttachStatement",
@@ -429,7 +430,7 @@ void DatabaseImpl::AttachStatementImpl(StatementImpl* st)
     mStatements.push_back(st);
 }
 
-void DatabaseImpl::DetachStatementImpl(StatementImpl* st)
+void DatabaseImplFb1::DetachStatementImpl(StatementImplFb1* st)
 {
     if (st == 0)
         throw LogicExceptionImpl("Database::DetachStatement",
@@ -438,7 +439,7 @@ void DatabaseImpl::DetachStatementImpl(StatementImpl* st)
     mStatements.erase(std::find(mStatements.begin(), mStatements.end(), st));
 }
 
-void DatabaseImpl::AttachBlobImpl(BlobImpl* bb)
+void DatabaseImplFb1::AttachBlobImpl(BlobImplFb1* bb)
 {
     if (bb == 0)
         throw LogicExceptionImpl("Database::AttachBlob",
@@ -447,7 +448,7 @@ void DatabaseImpl::AttachBlobImpl(BlobImpl* bb)
     mBlobs.push_back(bb);
 }
 
-void DatabaseImpl::DetachBlobImpl(BlobImpl* bb)
+void DatabaseImplFb1::DetachBlobImpl(BlobImplFb1* bb)
 {
     if (bb == 0)
         throw LogicExceptionImpl("Database::DetachBlob",
@@ -456,7 +457,7 @@ void DatabaseImpl::DetachBlobImpl(BlobImpl* bb)
     mBlobs.erase(std::find(mBlobs.begin(), mBlobs.end(), bb));
 }
 
-void DatabaseImpl::AttachArrayImpl(ArrayImpl* ar)
+void DatabaseImplFb1::AttachArrayImpl(ArrayImplFb1* ar)
 {
     if (ar == 0)
         throw LogicExceptionImpl("Database::AttachArray",
@@ -465,7 +466,7 @@ void DatabaseImpl::AttachArrayImpl(ArrayImpl* ar)
     mArrays.push_back(ar);
 }
 
-void DatabaseImpl::DetachArrayImpl(ArrayImpl* ar)
+void DatabaseImplFb1::DetachArrayImpl(ArrayImplFb1* ar)
 {
     if (ar == 0)
         throw LogicExceptionImpl("Database::DetachArray",
@@ -474,7 +475,7 @@ void DatabaseImpl::DetachArrayImpl(ArrayImpl* ar)
     mArrays.erase(std::find(mArrays.begin(), mArrays.end(), ar));
 }
 
-void DatabaseImpl::AttachEventsImpl(EventsImpl* ev)
+void DatabaseImplFb1::AttachEventsImpl(EventsImplFb1* ev)
 {
     if (ev == 0)
         throw LogicExceptionImpl("Database::AttachEventsImpl",
@@ -483,7 +484,7 @@ void DatabaseImpl::AttachEventsImpl(EventsImpl* ev)
     mEvents.push_back(ev);
 }
 
-void DatabaseImpl::DetachEventsImpl(EventsImpl* ev)
+void DatabaseImplFb1::DetachEventsImpl(EventsImplFb1* ev)
 {
     if (ev == 0)
         throw LogicExceptionImpl("Database::DetachEventsImpl",
@@ -492,7 +493,7 @@ void DatabaseImpl::DetachEventsImpl(EventsImpl* ev)
     mEvents.erase(std::find(mEvents.begin(), mEvents.end(), ev));
 }
 
-DatabaseImpl::DatabaseImpl(const std::string& ServerName, const std::string& DatabaseName,
+DatabaseImplFb1::DatabaseImplFb1(const std::string& ServerName, const std::string& DatabaseName,
                            const std::string& UserName, const std::string& UserPassword,
                            const std::string& RoleName, const std::string& CharSet,
                            const std::string& CreateParams) :
@@ -505,7 +506,7 @@ DatabaseImpl::DatabaseImpl(const std::string& ServerName, const std::string& Dat
 {
 }
 
-DatabaseImpl::~DatabaseImpl()
+DatabaseImplFb1::~DatabaseImplFb1()
 {
     try { if (Connected()) Disconnect(); }
         catch(...) { }

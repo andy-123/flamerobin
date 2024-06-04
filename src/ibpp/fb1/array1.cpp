@@ -21,6 +21,7 @@
 #endif
 
 #include "_ibpp.h"
+#include "ibppfb1.h"
 
 #ifdef HAS_HDRSTOP
 #pragma hdrstop
@@ -32,7 +33,7 @@ using namespace ibpp_internals;
 
 //	(((((((( OBJECT INTERFACE IMPLEMENTATION ))))))))
 
-void ArrayImpl::Describe(const std::string& table, const std::string& column)
+void ArrayImplFb1::Describe(const std::string& table, const std::string& column)
 {
 	//if (mIdAssigned)
 	//	throw LogicExceptionImpl("Array::Lookup", _("Array already in use."));
@@ -56,7 +57,7 @@ void ArrayImpl::Describe(const std::string& table, const std::string& column)
 	mDescribed = true;
 }
 
-void ArrayImpl::SetBounds(int dim, int low, int high)
+void ArrayImplFb1::SetBounds(int dim, int low, int high)
 {
 	if (! mDescribed)
 		throw LogicExceptionImpl("Array::SetBounds", _("Array description not set."));
@@ -80,7 +81,7 @@ void ArrayImpl::SetBounds(int dim, int low, int high)
 	AllocArrayBuffer();
 }
 
-IBPP::SDT ArrayImpl::ElementType()
+IBPP::SDT ArrayImplFb1::ElementType()
 {
 	if (! mDescribed)
 		throw LogicExceptionImpl("Array::ElementType",
@@ -107,7 +108,7 @@ IBPP::SDT ArrayImpl::ElementType()
 	return value;
 }
 
-int ArrayImpl::ElementSize()
+int ArrayImplFb1::ElementSize()
 {
 	if (! mDescribed)
 		throw LogicExceptionImpl("Array::ElementSize",
@@ -116,7 +117,7 @@ int ArrayImpl::ElementSize()
 	return mDesc.array_desc_length;
 }
 
-int ArrayImpl::ElementScale()
+int ArrayImplFb1::ElementScale()
 {
 	if (! mDescribed)
 		throw LogicExceptionImpl("Array::ElementScale",
@@ -125,7 +126,7 @@ int ArrayImpl::ElementScale()
 	return mDesc.array_desc_scale;
 }
 
-int ArrayImpl::Dimensions()
+int ArrayImplFb1::Dimensions()
 {
 	if (! mDescribed)
 		throw LogicExceptionImpl("Array::Dimensions",
@@ -134,7 +135,7 @@ int ArrayImpl::Dimensions()
 	return mDesc.array_desc_dimensions;
 }
 
-void ArrayImpl::Bounds(int dim, int* low, int* high)
+void ArrayImplFb1::Bounds(int dim, int* low, int* high)
 {
 	if (! mDescribed)
 		throw LogicExceptionImpl("Array::Bounds", _("Array description not set."));
@@ -179,7 +180,7 @@ We have no idea if this is fixed or not in Interbase 6.5 though.
 
 */
 
-void ArrayImpl::ReadTo(IBPP::ADT adtype, void* data, int datacount)
+void ArrayImplFb1::ReadTo(IBPP::ADT adtype, void* data, int datacount)
 {
 	if (! mIdAssigned)
 		throw LogicExceptionImpl("Array::ReadTo", _("Array Id not read from column."));
@@ -529,7 +530,7 @@ void ArrayImpl::ReadTo(IBPP::ADT adtype, void* data, int datacount)
 	}
 }
 
-void ArrayImpl::WriteFrom(IBPP::ADT adtype, const void* data, int datacount)
+void ArrayImplFb1::WriteFrom(IBPP::ADT adtype, const void* data, int datacount)
 {
 	if (! mDescribed)
 		throw LogicExceptionImpl("Array::WriteFrom", _("Array description not set."));
@@ -856,7 +857,7 @@ void ArrayImpl::WriteFrom(IBPP::ADT adtype, const void* data, int datacount)
 												_("Incompatible types."));
 			for (int i = 0; i < mElemCount; i++)
 			{
-				encodeDate(*(ISC_DATE*)dst, *(IBPP::Date*)src); 
+				encodeDate(*(ISC_DATE*)dst, *(IBPP::Date*)src);
 				src += sizeof(IBPP::Date);
 				dst += mElemSize;
 			}
@@ -887,14 +888,14 @@ void ArrayImpl::WriteFrom(IBPP::ADT adtype, const void* data, int datacount)
 		throw SQLExceptionImpl(status, "Array::WriteFrom", _("Internal buffer size discrepancy."));
 }
 
-IBPP::Database ArrayImpl::DatabasePtr() const
+IBPP::Database ArrayImplFb1::DatabasePtr() const
 {
 	if (mDatabase == 0) throw LogicExceptionImpl("Array::DatabasePtr",
 			_("No Database is attached."));
 	return mDatabase;
 }
 
-IBPP::Transaction ArrayImpl::TransactionPtr() const
+IBPP::Transaction ArrayImplFb1::TransactionPtr() const
 {
 	if (mTransaction == 0) throw LogicExceptionImpl("Array::TransactionPtr",
 			_("No Transaction is attached."));
@@ -903,7 +904,7 @@ IBPP::Transaction ArrayImpl::TransactionPtr() const
 
 //	(((((((( OBJECT INTERNAL METHODS ))))))))
 
-void ArrayImpl::Init()
+void ArrayImplFb1::Init()
 {
 	ResetId();
 	mDescribed = false;
@@ -913,30 +914,30 @@ void ArrayImpl::Init()
 	mBufferSize = 0;
 }
 
-void ArrayImpl::SetId(ISC_QUAD* quad)
+void ArrayImplFb1::SetId(ISC_QUAD* quad)
 {
 	if (quad == 0)
-		throw LogicExceptionImpl("ArrayImpl::SetId", _("Null Id reference detected."));
+		throw LogicExceptionImpl("ArrayImplFb1::SetId", _("Null Id reference detected."));
 
 	memcpy(&mId, quad, sizeof(mId));
 	mIdAssigned = true;
 }
 
-void ArrayImpl::GetId(ISC_QUAD* quad)
+void ArrayImplFb1::GetId(ISC_QUAD* quad)
 {
 	if (quad == 0)
-		throw LogicExceptionImpl("ArrayImpl::GetId", _("Null Id reference detected."));
+		throw LogicExceptionImpl("ArrayImplFb1::GetId", _("Null Id reference detected."));
 
 	memcpy(quad, &mId, sizeof(mId));
 }
 
-void ArrayImpl::ResetId()
+void ArrayImplFb1::ResetId()
 {
 	memset(&mId, 0, sizeof(mId));
 	mIdAssigned = false;
 }
 
-void ArrayImpl::AllocArrayBuffer()
+void ArrayImplFb1::AllocArrayBuffer()
 {
 	// Clean previous buffer if any
 	if (mBuffer != 0) delete [] (char*)mBuffer;
@@ -959,7 +960,7 @@ void ArrayImpl::AllocArrayBuffer()
 	mBuffer = (void*) new char[mBufferSize];
 }
 
-void ArrayImpl::AttachDatabaseImpl(DatabaseImpl* database)
+void ArrayImplFb1::AttachDatabaseImpl(DatabaseImplFb1* database)
 {
 	if (database == 0) throw LogicExceptionImpl("Array::AttachDatabase",
 			_("Can't attach a 0 Database object."));
@@ -969,7 +970,7 @@ void ArrayImpl::AttachDatabaseImpl(DatabaseImpl* database)
 	mDatabase->AttachArrayImpl(this);
 }
 
-void ArrayImpl::AttachTransactionImpl(TransactionImpl* transaction)
+void ArrayImplFb1::AttachTransactionImpl(TransactionImplFb1* transaction)
 {
 	if (transaction == 0) throw LogicExceptionImpl("Array::AttachTransaction",
 			_("Can't attach a 0 Transaction object."));
@@ -979,7 +980,7 @@ void ArrayImpl::AttachTransactionImpl(TransactionImpl* transaction)
 	mTransaction->AttachArrayImpl(this);
 }
 
-void ArrayImpl::DetachDatabaseImpl()
+void ArrayImplFb1::DetachDatabaseImpl()
 {
 	if (mDatabase == 0) return;
 
@@ -987,7 +988,7 @@ void ArrayImpl::DetachDatabaseImpl()
 	mDatabase = 0;
 }
 
-void ArrayImpl::DetachTransactionImpl()
+void ArrayImplFb1::DetachTransactionImpl()
 {
 	if (mTransaction == 0) return;
 
@@ -995,14 +996,14 @@ void ArrayImpl::DetachTransactionImpl()
 	mTransaction = 0;
 }
 
-ArrayImpl::ArrayImpl(DatabaseImpl* database, TransactionImpl* transaction)
+ArrayImplFb1::ArrayImplFb1(DatabaseImplFb1* database, TransactionImplFb1* transaction)
 {
 	Init();
 	AttachDatabaseImpl(database);
 	if (transaction != 0) AttachTransactionImpl(transaction);
 }
 
-ArrayImpl::~ArrayImpl()
+ArrayImplFb1::~ArrayImplFb1()
 {
 	try { if (mTransaction != 0) mTransaction->DetachArrayImpl(this); }
 		catch (...) {}

@@ -21,6 +21,7 @@
 #endif
 
 #include "_ibpp.h"
+#include "fb1/ibppfb1.h"
 
 #ifdef HAS_HDRSTOP
 #pragma hdrstop
@@ -30,7 +31,7 @@ using namespace ibpp_internals;
 
 //	(((((((( OBJECT INTERFACE IMPLEMENTATION ))))))))
 
-void BlobImpl::Open()
+void BlobImplFb1::Open()
 {
 	if (mHandle != 0)
 		throw LogicExceptionImpl("Blob::Open", _("Blob already opened."));
@@ -49,7 +50,7 @@ void BlobImpl::Open()
 	mWriteMode = false;
 }
 
-void BlobImpl::Create()
+void BlobImplFb1::Create()
 {
 	if (mHandle != 0)
 		throw LogicExceptionImpl("Blob::Create", _("Blob already opened."));
@@ -68,7 +69,7 @@ void BlobImpl::Create()
 	mWriteMode = true;
 }
 
-void BlobImpl::Close()
+void BlobImplFb1::Close()
 {
 	if (mHandle == 0) return;	// Not opened anyway
 
@@ -79,7 +80,7 @@ void BlobImpl::Close()
 	mHandle = 0;
 }
 
-void BlobImpl::Cancel()
+void BlobImplFb1::Cancel()
 {
 	if (mHandle == 0) return;	// Not opened anyway
 
@@ -94,7 +95,7 @@ void BlobImpl::Cancel()
 	mIdAssigned = false;
 }
 
-int BlobImpl::Read(void* buffer, int size)
+int BlobImplFb1::Read(void* buffer, int size)
 {
 	if (mHandle == 0)
 		throw LogicExceptionImpl("Blob::Read", _("The Blob is not opened"));
@@ -113,7 +114,7 @@ int BlobImpl::Read(void* buffer, int size)
 	return (int)bytesread;
 }
 
-void BlobImpl::Write(const void* buffer, int size)
+void BlobImplFb1::Write(const void* buffer, int size)
 {
 	if (mHandle == 0)
 		throw LogicExceptionImpl("Blob::Write", _("The Blob is not opened"));
@@ -129,7 +130,7 @@ void BlobImpl::Write(const void* buffer, int size)
 		throw SQLExceptionImpl(status, "Blob::Write", _("isc_put_segment failed."));
 }
 
-void BlobImpl::Info(int* Size, int* Largest, int* Segments)
+void BlobImplFb1::Info(int* Size, int* Largest, int* Segments)
 {
 	char items[] = {isc_info_blob_total_length,
 					isc_info_blob_max_segment,
@@ -150,7 +151,7 @@ void BlobImpl::Info(int* Size, int* Largest, int* Segments)
 	if (Segments != 0) *Segments = result.GetValue(isc_info_blob_num_segments);
 }
 
-void BlobImpl::Save(const std::string& data)
+void BlobImplFb1::Save(const std::string& data)
 {
 	if (mHandle != 0)
 		throw LogicExceptionImpl("Blob::Save", _("Blob already opened."));
@@ -182,7 +183,7 @@ void BlobImpl::Save(const std::string& data)
 		pos += blklen;
 		len -= blklen;
 	}
-	
+
 	status.Reset();
 	(*getGDS().Call()->m_close_blob)(status.Self(), &mHandle);
 	if (status.Errors())
@@ -190,7 +191,7 @@ void BlobImpl::Save(const std::string& data)
 	mHandle = 0;
 }
 
-void BlobImpl::Load(std::string& data)
+void BlobImplFb1::Load(std::string& data)
 {
 	if (mHandle != 0)
 		throw LogicExceptionImpl("Blob::Load", _("Blob already opened."));
@@ -229,7 +230,7 @@ void BlobImpl::Load(std::string& data)
 		data.resize(size + blklen);
 	}
 	data.resize(size);
-	
+
 	status.Reset();
 	(*getGDS().Call()->m_close_blob)(status.Self(), &mHandle);
 	if (status.Errors())
@@ -237,14 +238,14 @@ void BlobImpl::Load(std::string& data)
 	mHandle = 0;
 }
 
-IBPP::Database BlobImpl::DatabasePtr() const
+IBPP::Database BlobImplFb1::DatabasePtr() const
 {
 	if (mDatabase == 0) throw LogicExceptionImpl("Blob::DatabasePtr",
 			_("No Database is attached."));
 	return mDatabase;
 }
 
-IBPP::Transaction BlobImpl::TransactionPtr() const
+IBPP::Transaction BlobImplFb1::TransactionPtr() const
 {
 	if (mTransaction == 0) throw LogicExceptionImpl("Blob::TransactionPtr",
 			_("No Transaction is attached."));
@@ -253,7 +254,7 @@ IBPP::Transaction BlobImpl::TransactionPtr() const
 
 //	(((((((( OBJECT INTERNAL METHODS ))))))))
 
-void BlobImpl::Init()
+void BlobImplFb1::Init()
 {
 	mIdAssigned = false;
 	mWriteMode = false;
@@ -262,30 +263,30 @@ void BlobImpl::Init()
 	mTransaction = 0;
 }
 
-void BlobImpl::SetId(ISC_QUAD* quad)
+void BlobImplFb1::SetId(ISC_QUAD* quad)
 {
 	if (mHandle != 0)
-		throw LogicExceptionImpl("BlobImpl::SetId", _("Can't set Id on an opened BlobImpl."));
+		throw LogicExceptionImpl("BlobImplFb1::SetId", _("Can't set Id on an opened BlobImplFb1."));
 	if (quad == 0)
-		throw LogicExceptionImpl("BlobImpl::SetId", _("Null Id reference detected."));
+		throw LogicExceptionImpl("BlobImplFb1::SetId", _("Null Id reference detected."));
 
 	memcpy(&mId, quad, sizeof(mId));
 	mIdAssigned = true;
 }
 
-void BlobImpl::GetId(ISC_QUAD* quad)
+void BlobImplFb1::GetId(ISC_QUAD* quad)
 {
 	if (mHandle != 0)
-		throw LogicExceptionImpl("BlobImpl::GetId", _("Can't get Id on an opened BlobImpl."));
+		throw LogicExceptionImpl("BlobImplFb1::GetId", _("Can't get Id on an opened BlobImplFb1."));
 	if (! mWriteMode)
-		throw LogicExceptionImpl("BlobImpl::GetId", _("Can only get Id of a newly created Blob."));
+		throw LogicExceptionImpl("BlobImplFb1::GetId", _("Can only get Id of a newly created Blob."));
 	if (quad == 0)
-		throw LogicExceptionImpl("BlobImpl::GetId", _("Null Id reference detected."));
+		throw LogicExceptionImpl("BlobImplFb1::GetId", _("Null Id reference detected."));
 
 	memcpy(quad, &mId, sizeof(mId));
 }
 
-void BlobImpl::AttachDatabaseImpl(DatabaseImpl* database)
+void BlobImplFb1::AttachDatabaseImpl(DatabaseImplFb1* database)
 {
 	if (database == 0) throw LogicExceptionImpl("Blob::AttachDatabase",
 			_("Can't attach a NULL Database object."));
@@ -295,7 +296,7 @@ void BlobImpl::AttachDatabaseImpl(DatabaseImpl* database)
 	mDatabase->AttachBlobImpl(this);
 }
 
-void BlobImpl::AttachTransactionImpl(TransactionImpl* transaction)
+void BlobImplFb1::AttachTransactionImpl(TransactionImplFb1* transaction)
 {
 	if (transaction == 0) throw LogicExceptionImpl("Blob::AttachTransaction",
 			_("Can't attach a NULL Transaction object."));
@@ -305,7 +306,7 @@ void BlobImpl::AttachTransactionImpl(TransactionImpl* transaction)
 	mTransaction->AttachBlobImpl(this);
 }
 
-void BlobImpl::DetachDatabaseImpl()
+void BlobImplFb1::DetachDatabaseImpl()
 {
 	if (mDatabase == 0) return;
 
@@ -313,7 +314,7 @@ void BlobImpl::DetachDatabaseImpl()
 	mDatabase = 0;
 }
 
-void BlobImpl::DetachTransactionImpl()
+void BlobImplFb1::DetachTransactionImpl()
 {
 	if (mTransaction == 0) return;
 
@@ -321,14 +322,14 @@ void BlobImpl::DetachTransactionImpl()
 	mTransaction = 0;
 }
 
-BlobImpl::BlobImpl(DatabaseImpl* database, TransactionImpl* transaction)
+BlobImplFb1::BlobImplFb1(DatabaseImplFb1* database, TransactionImplFb1* transaction)
 {
 	Init();
 	AttachDatabaseImpl(database);
 	if (transaction != 0) AttachTransactionImpl(transaction);
 }
 
-BlobImpl::~BlobImpl()
+BlobImplFb1::~BlobImplFb1()
 {
 	try
 	{
@@ -339,7 +340,7 @@ BlobImpl::~BlobImpl()
 		}
 	}
 	catch (...) { }
-	
+
 	try { if (mTransaction != 0) mTransaction->DetachBlobImpl(this); }
 		catch (...) { }
 	try { if (mDatabase != 0) mDatabase->DetachBlobImpl(this); }

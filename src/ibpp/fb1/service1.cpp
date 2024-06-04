@@ -22,6 +22,7 @@
 #endif
 
 #include "_ibpp.h"
+#include "fb1/ibppfb1.h"
 
 #ifdef HAS_HDRSTOP
 #pragma hdrstop
@@ -38,7 +39,7 @@ using namespace ibpp_internals;
 
 //	(((((((( OBJECT INTERFACE IMPLEMENTATION ))))))))
 
-void ServiceImpl::Connect()
+void ServiceImplFb1::Connect()
 {
 	if (mHandle	!= 0) return;	// Already connected
 
@@ -82,11 +83,11 @@ void ServiceImpl::Connect()
 
     if (std::regex_search(version, m, std::regex("\\d+.\\d+.\\d+.\\d+"))) {
         version = m[0];
-        
+
         const std::regex re{ "((?:[^\\\\.]|\\\\.)+)(?:.|$)" };
 
-        const std::vector<std::string> m_vecFields{ std::sregex_token_iterator(cbegin(version), 
-            cend(version), re, 1), std::sregex_token_iterator() 
+        const std::vector<std::string> m_vecFields{ std::sregex_token_iterator(cbegin(version),
+            cend(version), re, 1), std::sregex_token_iterator()
         };
         if (m_vecFields.size() == 4) {
 
@@ -107,10 +108,10 @@ void ServiceImpl::Connect()
 
 }
 
-void ServiceImpl::Disconnect()
+void ServiceImplFb1::Disconnect()
 {
 	if (mHandle	== 0) return; // Already disconnected
-	
+
 	IBS status;
 
 	// Detach from the service manager
@@ -123,7 +124,7 @@ void ServiceImpl::Disconnect()
 		throw SQLExceptionImpl(status, "Service::Disconnect", _("isc_service_detach failed"));
 }
 
-void ServiceImpl::GetVersion(std::string& version)
+void ServiceImplFb1::GetVersion(std::string& version)
 {
 	// Based on a patch provided by Torsten Martinsen (SourceForge 'bullestock')
 
@@ -144,13 +145,13 @@ void ServiceImpl::GetVersion(std::string& version)
 	result.GetString(isc_info_svc_server_version, version);
 }
 
-bool ibpp_internals::ServiceImpl::versionIsHigherOrEqualTo(int versionMajor, int versionMinor)
+bool ServiceImplFb1::versionIsHigherOrEqualTo(int versionMajor, int versionMinor)
 {
     return major_ver > versionMajor
         || (major_ver == versionMajor && minor_ver >= versionMinor);
 }
 
-void ServiceImpl::AddUser(const IBPP::User& user)
+void ServiceImplFb1::AddUser(const IBPP::User& user)
 {
 	if (mHandle == 0)
 		throw LogicExceptionImpl("Service::AddUser", _("Service is not connected."));
@@ -182,7 +183,7 @@ void ServiceImpl::AddUser(const IBPP::User& user)
 	Wait();
 }
 
-void ServiceImpl::ModifyUser(const IBPP::User& user)
+void ServiceImplFb1::ModifyUser(const IBPP::User& user)
 {
 	if (mHandle == 0)
 		throw LogicExceptionImpl("Service::ModifyUser", _("Service is not connected."));
@@ -214,7 +215,7 @@ void ServiceImpl::ModifyUser(const IBPP::User& user)
 	Wait();
 }
 
-void ServiceImpl::RemoveUser(const std::string& username)
+void ServiceImplFb1::RemoveUser(const std::string& username)
 {
 
 	if (mHandle == 0)
@@ -235,7 +236,7 @@ void ServiceImpl::RemoveUser(const std::string& username)
 	Wait();
 }
 
-void ServiceImpl::GetUser(IBPP::User& user)
+void ServiceImplFb1::GetUser(IBPP::User& user)
 {
 	if (mHandle == 0)
 		throw LogicExceptionImpl("Service::GetUser", _("Service is not connected."));
@@ -304,7 +305,7 @@ void ServiceImpl::GetUser(IBPP::User& user)
 	}
 }
 
-void ServiceImpl::GetUsers(std::vector<IBPP::User>& users)
+void ServiceImplFb1::GetUsers(std::vector<IBPP::User>& users)
 {
 	if (mHandle == 0)
 		throw LogicExceptionImpl("Service::GetUsers", _("Service is not connected."));
@@ -375,7 +376,7 @@ void ServiceImpl::GetUsers(std::vector<IBPP::User>& users)
 	if (! user.username.empty()) users.push_back(user);	// Flush last user
 }
 
-void ServiceImpl::SetPageBuffers(const std::string& dbfile, int buffers)
+void ServiceImplFb1::SetPageBuffers(const std::string& dbfile, int buffers)
 {
 	if (mHandle	== 0)
 		throw LogicExceptionImpl("Service::SetPageBuffers", _("Service is not connected."));
@@ -396,7 +397,7 @@ void ServiceImpl::SetPageBuffers(const std::string& dbfile, int buffers)
 	Wait();
 }
 
-void ServiceImpl::SetSweepInterval(const std::string& dbfile, int sweep)
+void ServiceImplFb1::SetSweepInterval(const std::string& dbfile, int sweep)
 {
 	if (mHandle	== 0)
 		throw LogicExceptionImpl("Service::SetSweepInterval", _("Service is not connected."));
@@ -417,7 +418,7 @@ void ServiceImpl::SetSweepInterval(const std::string& dbfile, int sweep)
 	Wait();
 }
 
-void ServiceImpl::SetSyncWrite(const std::string& dbfile, bool sync)
+void ServiceImplFb1::SetSyncWrite(const std::string& dbfile, bool sync)
 {
 	if (mHandle	== 0)
 		throw LogicExceptionImpl("Service::SetSyncWrite", _("Service is not connected."));
@@ -439,7 +440,7 @@ void ServiceImpl::SetSyncWrite(const std::string& dbfile, bool sync)
 	Wait();
 }
 
-void ServiceImpl::SetReadOnly(const std::string& dbfile, bool readonly)
+void ServiceImplFb1::SetReadOnly(const std::string& dbfile, bool readonly)
 {
 	if (mHandle	== 0)
 		throw LogicExceptionImpl("Service::SetReadOnly", _("Service is not connected."));
@@ -461,7 +462,7 @@ void ServiceImpl::SetReadOnly(const std::string& dbfile, bool readonly)
 	Wait();
 }
 
-void ServiceImpl::SetReserveSpace(const std::string& dbfile, bool reserve)
+void ServiceImplFb1::SetReserveSpace(const std::string& dbfile, bool reserve)
 {
 	if (mHandle	== 0)
 		throw LogicExceptionImpl("Service::SetReserveSpace", _("Service is not connected."));
@@ -483,7 +484,7 @@ void ServiceImpl::SetReserveSpace(const std::string& dbfile, bool reserve)
 	Wait();
 }
 
-void ServiceImpl::Shutdown(const std::string& dbfile, IBPP::DSM flags, int sectimeout)
+void ServiceImplFb1::Shutdown(const std::string& dbfile, IBPP::DSM flags, int sectimeout)
 {
 	if (mHandle	== 0)
 		throw LogicExceptionImpl("Service::Shutdown", _("Service is not connected."));
@@ -495,25 +496,25 @@ void ServiceImpl::Shutdown(const std::string& dbfile, IBPP::DSM flags, int secti
 
 	spb.Insert(isc_action_svc_properties);
 	spb.InsertString(isc_spb_dbname, 2, dbfile.c_str());
-    
-	
+
+
     // Shutdown mode
     //if (flags & IBPP::dsCache) spb.InsertQuad(isc_spb_prp, sectimeout)
-    if (flags & IBPP::dsDenyTrans) 
+    if (flags & IBPP::dsDenyTrans)
         spb.InsertQuad(isc_spb_prp_deny_new_transactions, sectimeout);
-    if (flags & IBPP::dsDenyAttach) 
+    if (flags & IBPP::dsDenyAttach)
         spb.InsertQuad(isc_spb_prp_deny_new_attachments, sectimeout);
-    if (flags & IBPP::dsForce) 
+    if (flags & IBPP::dsForce)
         spb.InsertQuad(isc_spb_prp_force_shutdown, sectimeout);
 
     // Database Mode
-    if (flags & IBPP::dsNormal) 
+    if (flags & IBPP::dsNormal)
         spb.InsertByte(isc_spb_prp_shutdown_mode, isc_spb_prp_sm_normal);
-    if (flags & IBPP::dsSingle) 
+    if (flags & IBPP::dsSingle)
         spb.InsertByte(isc_spb_prp_shutdown_mode, isc_spb_prp_sm_single);
-    if (flags & IBPP::dsMulti) 
+    if (flags & IBPP::dsMulti)
         spb.InsertByte(isc_spb_prp_shutdown_mode, isc_spb_prp_sm_multi);
-    if (flags & IBPP::dsFull) 
+    if (flags & IBPP::dsFull)
         spb.InsertByte(isc_spb_prp_shutdown_mode, isc_spb_prp_sm_full);
 
 
@@ -524,7 +525,7 @@ void ServiceImpl::Shutdown(const std::string& dbfile, IBPP::DSM flags, int secti
 	Wait();
 }
 
-void ServiceImpl::Restart(const std::string& dbfile, IBPP::DSM /*flags*/)
+void ServiceImplFb1::Restart(const std::string& dbfile, IBPP::DSM /*flags*/)
 {
 	if (mHandle	== 0)
 		throw LogicExceptionImpl("Service::Restart", _("Service is not connected."));
@@ -545,7 +546,7 @@ void ServiceImpl::Restart(const std::string& dbfile, IBPP::DSM /*flags*/)
 	Wait();
 }
 
-void ServiceImpl::Sweep(const std::string& dbfile)
+void ServiceImplFb1::Sweep(const std::string& dbfile)
 {
 	if (mHandle	== 0)
 		throw LogicExceptionImpl("Service::Sweep", _("Service is not connected."));
@@ -566,7 +567,7 @@ void ServiceImpl::Sweep(const std::string& dbfile)
 	Wait();
 }
 
-void ServiceImpl::Repair(const std::string& dbfile, IBPP::RPF flags)
+void ServiceImplFb1::Repair(const std::string& dbfile, IBPP::RPF flags)
 {
 	if (mHandle	== 0)
 		throw LogicExceptionImpl("Service::Repair", _("Service is not connected."));
@@ -589,7 +590,7 @@ void ServiceImpl::Repair(const std::string& dbfile, IBPP::RPF flags)
 	if (flags & IBPP::rpReadOnly)			mask |= isc_spb_rpr_check_db;
 	if (flags & IBPP::rpIgnoreChecksums)	mask |= isc_spb_rpr_ignore_checksum;
 	if (flags & IBPP::rpKillShadows)		mask |= isc_spb_rpr_kill_shadows;
-	
+
 	spb.InsertQuad(isc_spb_options, mask);
 
 	(*getGDS().Call()->m_service_start)(status.Self(), &mHandle, 0, spb.Size(), spb.Self());
@@ -599,7 +600,7 @@ void ServiceImpl::Repair(const std::string& dbfile, IBPP::RPF flags)
 	Wait();
 }
 
-void ServiceImpl::StartBackup(
+void ServiceImplFb1::StartBackup(
     const std::string& dbfile,	const std::string& bkfile, const std::string& /*outfile*/,
     const int factor, IBPP::BRF flags,
     const std::string& cryptName, const std::string& keyHolder, const std::string& keyName,
@@ -622,31 +623,31 @@ void ServiceImpl::StartBackup(
 	spb.InsertString(isc_spb_bkp_file, 2, bkfile.c_str());
 
     if (versionIsHigherOrEqualTo(3, 0)) {
-        if ((flags & IBPP::brVerbose) && (verboseInteval == 0)) 
+        if ((flags & IBPP::brVerbose) && (verboseInteval == 0))
             spb.Insert(isc_spb_verbose);
-        if (verboseInteval > 0) 
+        if (verboseInteval > 0)
             spb.InsertQuad(isc_spb_verbint, verboseInteval);
     }else
-        if (flags & IBPP::brVerbose) 
+        if (flags & IBPP::brVerbose)
             spb.Insert(isc_spb_verbose);
 
-    if (factor > 0) 
+    if (factor > 0)
         spb.InsertQuad(isc_spb_bkp_factor, factor);
 
-    if (!skipData.empty() && versionIsHigherOrEqualTo(3, 0)) 
+    if (!skipData.empty() && versionIsHigherOrEqualTo(3, 0))
         spb.InsertString(isc_spb_bkp_skip_data, 2, skipData.c_str());
-    if (!includeData.empty() && versionIsHigherOrEqualTo(4, 0)) 
+    if (!includeData.empty() && versionIsHigherOrEqualTo(4, 0))
         spb.InsertString(isc_spb_bkp_include_data, 2, includeData.c_str());
 
     if (parallelWorkers > 0 && versionIsHigherOrEqualTo(3, 0))
         spb.InsertQuad(isc_spb_bkp_parallel_workers, parallelWorkers);
 
     if (versionIsHigherOrEqualTo(4, 0)) {
-        if (!cryptName.empty()) 
+        if (!cryptName.empty())
             spb.InsertString(isc_spb_bkp_crypt, 2, cryptName.c_str());
-        if (!keyHolder.empty()) 
+        if (!keyHolder.empty())
             spb.InsertString(isc_spb_bkp_keyholder, 2, keyHolder.c_str());
-        if (!keyName.empty()) 
+        if (!keyName.empty())
             spb.InsertString(isc_spb_bkp_keyname, 2, keyName.c_str());
     }
 
@@ -687,7 +688,7 @@ void ServiceImpl::StartBackup(
 		throw SQLExceptionImpl(status, "Service::Backup", _("isc_service_start failed"));
 }
 
-void ServiceImpl::StartRestore(
+void ServiceImplFb1::StartRestore(
     const std::string& bkfile, const std::string& dbfile, const std::string& /*outfile*/,
     int pagesize, int buffers, IBPP::BRF flags,
     const std::string& cryptName, const std::string& keyHolder, const std::string& keyName,
@@ -709,39 +710,39 @@ void ServiceImpl::StartRestore(
 	spb.InsertString(isc_spb_bkp_file, 2, bkfile.c_str());	spb.InsertString(isc_spb_dbname, 2, dbfile.c_str());
 
     if (versionIsHigherOrEqualTo(3, 0)) {
-        if ((flags & IBPP::brVerbose) && (verboseInteval == 0)) 
+        if ((flags & IBPP::brVerbose) && (verboseInteval == 0))
             spb.Insert(isc_spb_verbose);
-        if (verboseInteval > 0) 
+        if (verboseInteval > 0)
             spb.InsertQuad(isc_spb_verbint, verboseInteval);
     }
     else
-        if (flags & IBPP::brVerbose) 
+        if (flags & IBPP::brVerbose)
             spb.Insert(isc_spb_verbose);
 
-	if (pagesize >	0) 
+	if (pagesize >	0)
         spb.InsertQuad(isc_spb_res_page_size, pagesize);
-    if (buffers > 0) 
+    if (buffers > 0)
         spb.InsertQuad(isc_spb_res_buffers, buffers);
 
     if (parallelWorkers > 0 && versionIsHigherOrEqualTo(3, 0))
         spb.InsertQuad(isc_spb_bkp_parallel_workers, parallelWorkers);
 
-    if (!skipData.empty() && versionIsHigherOrEqualTo(3, 0)) 
+    if (!skipData.empty() && versionIsHigherOrEqualTo(3, 0))
         spb.InsertString(isc_spb_res_skip_data, 2, skipData.c_str());
-    if (!includeData.empty() && versionIsHigherOrEqualTo(4, 0)) 
+    if (!includeData.empty() && versionIsHigherOrEqualTo(4, 0))
         spb.InsertString(isc_spb_res_include_data, 2, includeData.c_str());
 
     if (versionIsHigherOrEqualTo(4, 0)) {
-        if (!cryptName.empty()) 
+        if (!cryptName.empty())
             spb.InsertString(isc_spb_res_crypt, 2, cryptName.c_str());
-        if (!keyHolder.empty()) 
+        if (!keyHolder.empty())
             spb.InsertString(isc_spb_res_keyholder, 2, keyHolder.c_str());
-        if (!keyName.empty()) 
+        if (!keyName.empty())
             spb.InsertString(isc_spb_res_keyname, 2, keyName.c_str());
     }
 
     spb.InsertByte(isc_spb_res_access_mode, (flags & IBPP::brDatabase_readonly) ? isc_spb_res_am_readonly : isc_spb_res_am_readwrite);
-    
+
 
     if (versionIsHigherOrEqualTo(4, 0)) {
         if (flags & IBPP::brReplicaMode_none)
@@ -761,7 +762,7 @@ void ServiceImpl::StartRestore(
 	if (flags & IBPP::brUseAllSpace)	    mask |= isc_spb_res_use_all_space;
 
     if (versionIsHigherOrEqualTo(2, 5)) {
-        if (flags & IBPP::brMetadataOnly)		
+        if (flags & IBPP::brMetadataOnly)
             mask |= isc_spb_res_metadata_only;
         if (flags & IBPP::brFix_Fss_Data)
             spb.InsertString(isc_spb_res_fix_fss_data, 2, mCharSet.c_str());
@@ -779,8 +780,8 @@ void ServiceImpl::StartRestore(
             spb.InsertString(isc_spb_bkp_stat, 2, stFlags.c_str());
 
     }
-    
-    if (mask != 0) 
+
+    if (mask != 0)
         spb.InsertQuad(isc_spb_options, mask);
 
 	(*getGDS().Call()->m_service_start)(status.Self(), &mHandle, 0, spb.Size(), spb.Self());
@@ -788,7 +789,7 @@ void ServiceImpl::StartRestore(
 		throw SQLExceptionImpl(status, "Service::Restore", _("isc_service_start failed"));
 }
 
-const char* ServiceImpl::WaitMsg()
+const char* ServiceImplFb1::WaitMsg()
 {
 	IBS status;
 	SPB req;
@@ -801,7 +802,7 @@ const char* ServiceImpl::WaitMsg()
 	(*getGDS().Call()->m_service_query)(status.Self(), &mHandle, 0, 0, 0,
 		req.Size(),	req.Self(),	result.Size(), result.Self());
 	if (status.Errors())
-		throw SQLExceptionImpl(status, "ServiceImpl::Wait", _("isc_service_query failed"));
+		throw SQLExceptionImpl(status, "ServiceImplFb1::Wait", _("isc_service_query failed"));
 
 	// If message length is	zero bytes,	task is	finished
 	if (result.GetString(isc_info_svc_line,	mWaitMessage) == 0) return 0;
@@ -810,7 +811,7 @@ const char* ServiceImpl::WaitMsg()
 	return mWaitMessage.c_str();
 }
 
-void ServiceImpl::Wait()
+void ServiceImplFb1::Wait()
 {
 	IBS status;
 	SPB spb;
@@ -829,11 +830,11 @@ void ServiceImpl::Wait()
 		Sleep(1);
 
 		// _service_query will only block until a line of result is available
-		// (or until the end of the task if it does not report information) 
+		// (or until the end of the task if it does not report information)
 		(*getGDS().Call()->m_service_query)(status.Self(), &mHandle, 0, 0,	0,
 			spb.Size(),	spb.Self(),	result.Size(), result.Self());
 		if (status.Errors())
-			throw SQLExceptionImpl(status, "ServiceImpl::Wait", _("isc_service_query failed"));
+			throw SQLExceptionImpl(status, "ServiceImplFb1::Wait", _("isc_service_query failed"));
 
 		// If message length is	zero bytes,	task is	finished
 		if (result.GetString(isc_info_svc_line,	msg) ==	0) return;
@@ -845,33 +846,33 @@ void ServiceImpl::Wait()
 
 //	(((((((( OBJECT INTERNAL METHODS ))))))))
 
-void ServiceImpl::SetServerName(const char* newName)
+void ServiceImplFb1::SetServerName(const char* newName)
 {
 	if (newName == 0) mServerName.erase();
 	else mServerName = newName;
 }
 
-void ServiceImpl::SetUserName(const char* newName)
+void ServiceImplFb1::SetUserName(const char* newName)
 {
 	if (newName == 0) mUserName.erase();
 	else mUserName = newName;
 }
 
-void ServiceImpl::SetUserPassword(const char* newPassword)
+void ServiceImplFb1::SetUserPassword(const char* newPassword)
 {
 	if (newPassword == 0) mUserPassword.erase();
 	else mUserPassword = newPassword;
 }
 
-void ibpp_internals::ServiceImpl::SetCharSet(const char* newCharset)
+void ServiceImplFb1::SetCharSet(const char* newCharset)
 {
-    if (newCharset == 0) 
+    if (newCharset == 0)
         mCharSet.erase();
-    else 
+    else
         mCharSet = newCharset;
 }
 
-void ibpp_internals::ServiceImpl::SetRoleName(const char* newRoleName)
+void ServiceImplFb1::SetRoleName(const char* newRoleName)
 {
     if (newRoleName == 0)
         mRoleName.erase();
@@ -879,8 +880,8 @@ void ibpp_internals::ServiceImpl::SetRoleName(const char* newRoleName)
         mRoleName = newRoleName;
 }
 
-ServiceImpl::ServiceImpl(const std::string& ServerName,
-			const std::string& UserName, const std::string& UserPassword, 
+ServiceImplFb1::ServiceImplFb1(const std::string& ServerName,
+			const std::string& UserName, const std::string& UserPassword,
             const std::string& RoleName, const std::string& CharSet)
 	:	mHandle(0),
 		mServerName(ServerName), mUserName(UserName), mUserPassword(UserPassword),
@@ -888,7 +889,7 @@ ServiceImpl::ServiceImpl(const std::string& ServerName,
 {
 }
 
-ServiceImpl::~ServiceImpl()
+ServiceImplFb1::~ServiceImplFb1()
 {
 	try { if (Connected()) Disconnect(); }
 		catch (...) { }

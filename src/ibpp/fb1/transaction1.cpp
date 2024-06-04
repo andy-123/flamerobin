@@ -22,6 +22,7 @@
 #endif
 
 #include "_ibpp.h"
+#include "fb1/ibppfb1.h"
 
 #ifdef HAS_HDRSTOP
 #pragma hdrstop
@@ -33,26 +34,26 @@ using namespace ibpp_internals;
 
 //  (((((((( OBJECT INTERFACE IMPLEMENTATION ))))))))
 
-void TransactionImpl::AttachDatabase(IBPP::Database db,
+void TransactionImplFb1::AttachDatabase(IBPP::Database db,
     IBPP::TAM am, IBPP::TIL il, IBPP::TLR lr, IBPP::TFF flags)
 {
     if (db.intf() == 0)
         throw LogicExceptionImpl("Transaction::AttachDatabase",
                 _("Can't attach an unbound Database."));
 
-    AttachDatabaseImpl(dynamic_cast<DatabaseImpl*>(db.intf()), am, il, lr, flags);
+    AttachDatabaseImpl(dynamic_cast<DatabaseImplFb1*>(db.intf()), am, il, lr, flags);
 }
 
-void TransactionImpl::DetachDatabase(IBPP::Database db)
+void TransactionImplFb1::DetachDatabase(IBPP::Database db)
 {
     if (db.intf() == 0)
         throw LogicExceptionImpl("Transaction::DetachDatabase",
                 _("Can't detach an unbound Database."));
 
-    DetachDatabaseImpl(dynamic_cast<DatabaseImpl*>(db.intf()));
+    DetachDatabaseImpl(dynamic_cast<DatabaseImplFb1*>(db.intf()));
 }
 
-void TransactionImpl::AddReservation(IBPP::Database db,
+void TransactionImplFb1::AddReservation(IBPP::Database db,
     const std::string& table, IBPP::TTR tr)
 {
     if (mHandle != 0)
@@ -63,8 +64,8 @@ void TransactionImpl::AddReservation(IBPP::Database db,
                 _("Can't add table reservation on an unbound Database."));
 
     // Find the TPB associated with this database
-    std::vector<DatabaseImpl*>::iterator pos =
-        std::find(mDatabases.begin(), mDatabases.end(), dynamic_cast<DatabaseImpl*>(db.intf()));
+    std::vector<DatabaseImplFb1*>::iterator pos =
+        std::find(mDatabases.begin(), mDatabases.end(), dynamic_cast<DatabaseImplFb1*>(db.intf()));
     if (pos != mDatabases.end())
     {
         size_t index = pos - mDatabases.begin();
@@ -102,7 +103,7 @@ void TransactionImpl::AddReservation(IBPP::Database db,
             _("The database connection you specified is not attached to this transaction."));
 }
 
-void TransactionImpl::Start()
+void TransactionImplFb1::Start()
 {
     if (mHandle != 0) return;   // Already started anyway
 
@@ -141,7 +142,7 @@ void TransactionImpl::Start()
     }
 }
 
-void TransactionImpl::Commit()
+void TransactionImplFb1::Commit()
 {
     if (mHandle == 0)
         throw LogicExceptionImpl("Transaction::Commit", _("Transaction is not started."));
@@ -160,7 +161,7 @@ void TransactionImpl::Commit()
     */
 }
 
-void TransactionImpl::CommitRetain()
+void TransactionImplFb1::CommitRetain()
 {
     if (mHandle == 0)
         throw LogicExceptionImpl("Transaction::CommitRetain", _("Transaction is not started."));
@@ -172,7 +173,7 @@ void TransactionImpl::CommitRetain()
         throw SQLExceptionImpl(status, "Transaction::CommitRetain");
 }
 
-void TransactionImpl::Rollback()
+void TransactionImplFb1::Rollback()
 {
     if (mHandle == 0) return;   // Transaction not started anyway
 
@@ -190,7 +191,7 @@ void TransactionImpl::Rollback()
     */
 }
 
-void TransactionImpl::RollbackRetain()
+void TransactionImplFb1::RollbackRetain()
 {
     if (mHandle == 0)
         throw LogicExceptionImpl("Transaction::RollbackRetain", _("Transaction is not started."));
@@ -204,7 +205,7 @@ void TransactionImpl::RollbackRetain()
 
 //  (((((((( OBJECT INTERNAL METHODS ))))))))
 
-void TransactionImpl::Init()
+void TransactionImplFb1::Init()
 {
     mHandle = 0;
     mDatabases.clear();
@@ -214,7 +215,7 @@ void TransactionImpl::Init()
     mArrays.clear();
 }
 
-void TransactionImpl::AttachStatementImpl(StatementImpl* st)
+void TransactionImplFb1::AttachStatementImpl(StatementImplFb1* st)
 {
     if (st == 0)
         throw LogicExceptionImpl("Transaction::AttachStatement",
@@ -223,7 +224,7 @@ void TransactionImpl::AttachStatementImpl(StatementImpl* st)
     mStatements.push_back(st);
 }
 
-void TransactionImpl::DetachStatementImpl(StatementImpl* st)
+void TransactionImplFb1::DetachStatementImpl(StatementImplFb1* st)
 {
     if (st == 0)
         throw LogicExceptionImpl("Transaction::DetachStatement",
@@ -232,7 +233,7 @@ void TransactionImpl::DetachStatementImpl(StatementImpl* st)
     mStatements.erase(std::find(mStatements.begin(), mStatements.end(), st));
 }
 
-void TransactionImpl::AttachBlobImpl(BlobImpl* bb)
+void TransactionImplFb1::AttachBlobImpl(BlobImplFb1* bb)
 {
     if (bb == 0)
         throw LogicExceptionImpl("Transaction::AttachBlob",
@@ -241,7 +242,7 @@ void TransactionImpl::AttachBlobImpl(BlobImpl* bb)
     mBlobs.push_back(bb);
 }
 
-void TransactionImpl::DetachBlobImpl(BlobImpl* bb)
+void TransactionImplFb1::DetachBlobImpl(BlobImplFb1* bb)
 {
     if (bb == 0)
         throw LogicExceptionImpl("Transaction::DetachBlob",
@@ -250,7 +251,7 @@ void TransactionImpl::DetachBlobImpl(BlobImpl* bb)
     mBlobs.erase(std::find(mBlobs.begin(), mBlobs.end(), bb));
 }
 
-void TransactionImpl::AttachArrayImpl(ArrayImpl* ar)
+void TransactionImplFb1::AttachArrayImpl(ArrayImplFb1* ar)
 {
     if (ar == 0)
         throw LogicExceptionImpl("Transaction::AttachArray",
@@ -259,7 +260,7 @@ void TransactionImpl::AttachArrayImpl(ArrayImpl* ar)
     mArrays.push_back(ar);
 }
 
-void TransactionImpl::DetachArrayImpl(ArrayImpl* ar)
+void TransactionImplFb1::DetachArrayImpl(ArrayImplFb1* ar)
 {
     if (ar == 0)
         throw LogicExceptionImpl("Transaction::DetachArray",
@@ -268,7 +269,7 @@ void TransactionImpl::DetachArrayImpl(ArrayImpl* ar)
     mArrays.erase(std::find(mArrays.begin(), mArrays.end(), ar));
 }
 
-void TransactionImpl::AttachDatabaseImpl(DatabaseImpl* dbi,
+void TransactionImplFb1::AttachDatabaseImpl(DatabaseImplFb1* dbi,
     IBPP::TAM am, IBPP::TIL il, IBPP::TLR lr, IBPP::TFF flags)
 {
     if (mHandle != 0)
@@ -308,7 +309,7 @@ void TransactionImpl::AttachDatabaseImpl(DatabaseImpl* dbi,
     dbi->AttachTransactionImpl(this);
 }
 
-void TransactionImpl::DetachDatabaseImpl(DatabaseImpl* dbi)
+void TransactionImplFb1::DetachDatabaseImpl(DatabaseImplFb1* dbi)
 {
     if (mHandle != 0)
         throw LogicExceptionImpl("Transaction::DetachDatabase",
@@ -317,7 +318,7 @@ void TransactionImpl::DetachDatabaseImpl(DatabaseImpl* dbi)
         throw LogicExceptionImpl("Transaction::DetachDatabase",
                 _("Can't detach a null Database."));
 
-    std::vector<DatabaseImpl*>::iterator pos =
+    std::vector<DatabaseImplFb1*>::iterator pos =
         std::find(mDatabases.begin(), mDatabases.end(), dbi);
     if (pos != mDatabases.end())
     {
@@ -332,14 +333,14 @@ void TransactionImpl::DetachDatabaseImpl(DatabaseImpl* dbi)
     dbi->DetachTransactionImpl(this);
 }
 
-TransactionImpl::TransactionImpl(DatabaseImpl* db,
+TransactionImplFb1::TransactionImplFb1(DatabaseImplFb1* db,
     IBPP::TAM am, IBPP::TIL il, IBPP::TLR lr, IBPP::TFF flags)
 {
     Init();
     AttachDatabaseImpl(db, am, il, lr, flags);
 }
 
-TransactionImpl::~TransactionImpl()
+TransactionImplFb1::~TransactionImplFb1()
 {
     // Rollback the transaction if it was Started
     try { if (Started()) Rollback(); }

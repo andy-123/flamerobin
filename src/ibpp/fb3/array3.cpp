@@ -45,7 +45,8 @@ void ArrayImplFb3::Describe(const std::string& table, const std::string& column)
 	ResetId();	// Re-use this array object if was previously assigned
 
 	IBS status;
-	(*getGDS().Call()->m_array_lookup_bounds)(status.Self(), mDatabase->GetHandlePtr(),
+    isc_db_handle dbh = mDatabase->GetHandle();
+	(*getGDS().Call()->m_array_lookup_bounds)(status.Self(), &dbh,
 		mTransaction->GetHandlePtr(), const_cast<char*>(table.c_str()),
 			const_cast<char*>(column.c_str()), &mDesc);
 	if (status.Errors())
@@ -195,7 +196,8 @@ void ArrayImplFb3::ReadTo(IBPP::ADT adtype, void* data, int datacount)
 
 	IBS status;
 	ISC_LONG lenbuf = mBufferSize;
-	(*getGDS().Call()->m_array_get_slice)(status.Self(), mDatabase->GetHandlePtr(),
+    isc_db_handle dbh = mDatabase->GetHandle();
+	(*getGDS().Call()->m_array_get_slice)(status.Self(), &dbh,
 		mTransaction->GetHandlePtr(), &mId, &mDesc, mBuffer, &lenbuf);
 	if (status.Errors())
 		throw SQLExceptionImpl(status, "Array::ReadTo", _("isc_array_get_slice failed."));
@@ -880,7 +882,8 @@ void ArrayImplFb3::WriteFrom(IBPP::ADT adtype, const void* data, int datacount)
 
 	IBS status;
 	ISC_LONG lenbuf = mBufferSize;
-	(*getGDS().Call()->m_array_put_slice)(status.Self(), mDatabase->GetHandlePtr(),
+    isc_db_handle dbh = mDatabase->GetHandle();
+	(*getGDS().Call()->m_array_put_slice)(status.Self(), &dbh,
 		mTransaction->GetHandlePtr(), &mId, &mDesc, mBuffer, &lenbuf);
 	if (status.Errors())
 		throw SQLExceptionImpl(status, "Array::WriteFrom", _("isc_array_put_slice failed."));

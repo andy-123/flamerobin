@@ -60,6 +60,31 @@ public:
     ~DPBFb1() { Reset(); }
 };
 
+//
+//  Transaction Parameter Block (used to define a transaction)
+//
+
+class TPBFb1
+{
+    static const int BUFFERINCR;
+
+    char* mBuffer;                  // Dynamically allocated TPB structure
+    int mSize;                      // Its used size in bytes
+    int mAlloc;                     // Its allocated size
+
+    void Grow(int needed);          // Alloc or re-alloc the mBuffer
+
+public:
+    void Insert(char);              // Insert a flag item
+    void Insert(const std::string& data); // Insert a string (typically table name)
+    void Reset();               // Clears the TPB
+    char* Self() { return mBuffer; }
+    int Size() { return mSize; }
+
+    TPBFb1() : mBuffer(0), mSize(0), mAlloc(0) { }
+    ~TPBFb1() { Reset(); }
+};
+
 class ServiceImplFb1 : public IBPP::IService
 {
     //  (((((((( OBJECT INTERNALS ))))))))
@@ -230,7 +255,7 @@ private:
     std::vector<StatementImplFb1*> mStatements;    // Table of IStatement*
     std::vector<BlobImplFb1*> mBlobs;              // Table of IBlob*
     std::vector<ArrayImplFb1*> mArrays;            // Table of Array*
-    std::vector<TPB*> mTPBs;                    // Table of TPB
+    std::vector<TPBFb1*> mTPBs;                    // Table of TPB
 
     void Init();            // A usage exclusif des constructeurs
 

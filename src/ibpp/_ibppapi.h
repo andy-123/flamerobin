@@ -56,11 +56,11 @@ sollte mal entfernt werden -> nach ibppfb3.h wandern
 #ifdef IBPP_WINDOWS
 /*#define IB_ENTRYPOINT(X) \
 			if ((m_##X = (proto_##X*)GetProcAddress(mHandle, "isc_"#X)) == 0) \
-                throw LogicExceptionImpl("FBCLIENT:gds()", _("Entry-point isc_"#X" not found"))
-#define FB_ENTRYPOINT(X) \
-            if ((m_##X = (proto_##X*)GetProcAddress(mHandle, "fb_"#X)) == 0) \
-                throw LogicExceptionImpl("FBCLIENT:gds()", _("Entry-point fb_"#X" not found"))*/
-#define FB_ENTRYPOINT_NOTHROW(H, X) \
+                throw LogicExceptionImpl("FBCLIENT:gds()", _("Entry-point isc_"#X" not found"))*/
+#define FB_LOADDYN(H, X) \
+            if ((m_##X = (proto_##X*)GetProcAddress(H, "fb_"#X)) == 0) \
+                throw LogicExceptionImpl("FBCLIENT:gds()", _("Entry-point fb_"#X" not found"))
+#define FB_LOADDYN_NOTHROW(H, X) \
     if ((m_##X = (proto_##X*)GetProcAddress(H, "fb_"#X)) == 0) \
         m_##X = NULL;
 #endif
@@ -68,15 +68,15 @@ sollte mal entfernt werden -> nach ibppfb3.h wandern
 /*#ifdef IBPP_LATE_BIND
 #define IB_ENTRYPOINT(X) \
     if ((m_##X = (proto_##X*)dlsym(mHandle,"isc_"#X)) == 0) \
-        throw LogicExceptionImpl("FBCLIENT:gds()", _("Entry-point isc_"#X" not found"))
-#define FB_ENTRYPOINT(X) \
-    if ((m_##X = (proto_##X*)dlsym(mHandle,"fb_"#X)) == 0) \
+        throw LogicExceptionImpl("FBCLIENT:gds()", _("Entry-point isc_"#X" not found"))*/
+#define FB_LOADDYN(H, X) \
+    if ((m_##X = (proto_##X*)dlsym(H,"fb_"#X)) == 0) \
         throw LogicExceptionImpl("FBCLIENT:gds()", _("Entry-point fb_"#X" not found"))
-#else
+/*#else
 #define IB_ENTRYPOINT(X) m_##X = (proto_##X*)isc_##X
 #define FB_ENTRYPOINT(X) m_##X = (proto_##X*)fb_##X
 #endif*/
-#define FB_ENTRYPOINT_NOTHROW(H, X) \
+#define FB_LOADDYN_NOTHROW(H, X) \
     if ((m_##X = (proto_##X*)dlsym(H,"fb_"#X)) == 0) \
         m_##X = NULL;
 #endif
@@ -94,6 +94,9 @@ typedef
     ISC_STATUS ISC_EXPORT proto_get_database_handle(ISC_STATUS*,
         isc_db_handle*, void*);
 
+typedef
+    ISC_STATUS ISC_EXPORT proto_get_transaction_handle(ISC_STATUS*,
+        isc_tr_handle*, void*);
 }
 
 #endif

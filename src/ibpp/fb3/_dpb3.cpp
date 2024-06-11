@@ -33,8 +33,6 @@
 using namespace ibpp_internals;
 using namespace Firebird;
 
-const int DPBFb3::BUFFERINCR = 128;
-
 void DPBFb3::Clear()
 {
     mDPB->clear(mStatus);
@@ -50,9 +48,9 @@ unsigned DPBFb3::GetBufferLength()
     return mDPB->getBufferLength(mStatus);
 }
 
-void DPBFb3::InsertString(unsigned char tag, const char* str)
+void DPBFb3::InsertString(unsigned char tag, const std::string& str)
 {
-    mDPB->insertString(mStatus, tag, str);
+    mDPB->insertString(mStatus, tag, str.c_str());
 }
 
 /*void DPBFb3::Insert(char type, int16_t data)
@@ -93,5 +91,6 @@ DPBFb3::DPBFb3()
 
 DPBFb3::~DPBFb3()
 {
+    mDPB = nullptr;
     delete mStatus;
 }

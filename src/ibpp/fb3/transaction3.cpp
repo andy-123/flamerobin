@@ -56,7 +56,7 @@ void TransactionImplFb3::DetachDatabase(IBPP::Database db)
 void TransactionImplFb3::AddReservation(IBPP::Database db,
     const std::string& table, IBPP::TTR tr)
 {
-    if (mHandle != 0)
+    if (mTra != 0)
         throw LogicExceptionImpl("Transaction::AddReservation",
                 _("Can't add table reservation if Transaction started."));
     if (db.intf() == 0)
@@ -69,30 +69,26 @@ void TransactionImplFb3::AddReservation(IBPP::Database db,
     if (pos != mDatabases.end())
     {
         size_t index = pos - mDatabases.begin();
-        TPB* tpb = mTPBs[index];
+        TPBFb3* tpb = mTPBs[index];
 
         // Now add the reservations to the TPB
         switch (tr)
         {
             case IBPP::trSharedWrite :
-                    tpb->Insert(isc_tpb_lock_write);
-                    tpb->Insert(table);
-                    tpb->Insert(isc_tpb_shared);
+                    tpb->InsertString(isc_tpb_lock_write, table);
+                    tpb->InsertTag(isc_tpb_shared);
                     break;
             case IBPP::trSharedRead :
-                    tpb->Insert(isc_tpb_lock_read);
-                    tpb->Insert(table);
-                    tpb->Insert(isc_tpb_shared);
+                    tpb->InsertString(isc_tpb_lock_read, table);
+                    tpb->InsertTag(isc_tpb_shared);
                     break;
             case IBPP::trProtectedWrite :
-                    tpb->Insert(isc_tpb_lock_write);
-                    tpb->Insert(table);
-                    tpb->Insert(isc_tpb_protected);
+                    tpb->InsertString(isc_tpb_lock_write, table);
+                    tpb->InsertTag(isc_tpb_protected);
                     break;
             case IBPP::trProtectedRead :
-                    tpb->Insert(isc_tpb_lock_read);
-                    tpb->Insert(table);
-                    tpb->Insert(isc_tpb_protected);
+                    tpb->InsertString(isc_tpb_lock_read, table);
+                    tpb->InsertTag(isc_tpb_protected);
                     break;
             default :
                     throw LogicExceptionImpl("Transaction::AddReservation",
@@ -105,109 +101,111 @@ void TransactionImplFb3::AddReservation(IBPP::Database db,
 
 void TransactionImplFb3::Start()
 {
-    if (mHandle != 0) return;   // Already started anyway
+    // Already started anyway?
+    if (mTra != 0)
+        return;
 
     if (mDatabases.empty())
         throw LogicExceptionImpl("Transaction::Start", _("No Database is attached."));
 
-    struct ISC_TEB
-    {
-        ISC_LONG* db_ptr;
-        ISC_LONG tpb_len;
-        char* tpb_ptr;
-    } * teb = new ISC_TEB[mDatabases.size()];
+    Firebird::IMaster* master = FactoriesImplFb3::gMaster;
+    Firebird::IDtc* dtc = master->getDtc();
+    Firebird::IDtcStart* dtcStart = dtc->startBuilder(mStatus);
+    if (mStatus->isDirty())
+       throw SQLExceptionImpl(mStatus, "Transaction::Start", "IDtc::startBuilder failed.");
 
     unsigned i;
+    Firebird::IAttachment* atm;
     for (i = 0; i < mDatabases.size(); i++)
     {
-        if (mDatabases[i]->GetHandle() == 0)
+        atm = mDatabases[i]->GetFbIntf();
+        if (atm == nullptr)
         {
             // All Databases must be connected to Start the transaction !
-            delete [] teb;
             throw LogicExceptionImpl("Transaction::Start",
                     _("All attached Database should have been connected."));
         }
-        teb[i].db_ptr = (ISC_LONG*) mDatabases[i]->GetHandlePtr();
-        teb[i].tpb_len = mTPBs[i]->Size();
-        teb[i].tpb_ptr = mTPBs[i]->Self();
+        dtcStart->addAttachment(mStatus, atm);
+        if (mStatus->isDirty())
+           throw SQLExceptionImpl(mStatus, "Transaction::Start", "IDtcStart::addAttachment failed.");
     }
 
-    IBS status;
-    (*getGDS().Call()->m_start_multiple)(status.Self(), &mHandle, (short)mDatabases.size(), teb);
-    delete [] teb;
-    if (status.Errors())
+    mTra = dtcStart->start(mStatus);
+    if (mStatus->isDirty())
     {
-        mHandle = 0;    // Should be, but better be sure...
-        throw SQLExceptionImpl(status, "Transaction::Start");
+        // Should be, but better be sure...
+        mTra = nullptr;
+        mHandle = 0;
+        throw SQLExceptionImpl(mStatus, "Transaction::Start", "IDtcStart::start failed.");
     }
+    // FIXME: remove m_get_transaction_handle call
+    IBS status;
+    FactoriesImplFb3::m_get_transaction_handle(status.Self(), &mHandle, mTra);
+    if (status.Errors())
+        throw SQLExceptionImpl(status, "Transaction::Start", _("fb_get_transaction_handle failed"));
 }
 
 void TransactionImplFb3::Commit()
 {
-    if (mHandle == 0)
+    if (mTra == nullptr)
         throw LogicExceptionImpl("Transaction::Commit", _("Transaction is not started."));
 
-    IBS status;
-
-    (*getGDS().Call()->m_commit_transaction)(status.Self(), &mHandle);
-    if (status.Errors())
-        throw SQLExceptionImpl(status, "Transaction::Commit");
-    mHandle = 0;    // Should be, better be sure
-
-    /*
-    size_t i;
-    for (i = mStatements.size(); i != 0; i--)
-        mStatements[i-1]->CursorFree();
-    */
+    mTra->commit(mStatus);
+    if (mStatus->isDirty())
+        throw SQLExceptionImpl(mStatus, "Transaction::Commit");
+    // Should be, better be sure
+    mHandle = 0;    
+    mTra = nullptr;
 }
 
 void TransactionImplFb3::CommitRetain()
 {
-    if (mHandle == 0)
+    if (mTra == nullptr)
         throw LogicExceptionImpl("Transaction::CommitRetain", _("Transaction is not started."));
 
-    IBS status;
-
-    (*getGDS().Call()->m_commit_retaining)(status.Self(), &mHandle);
-    if (status.Errors())
-        throw SQLExceptionImpl(status, "Transaction::CommitRetain");
+    mTra->commitRetaining(mStatus);
+    if (mStatus->isDirty())
+        throw SQLExceptionImpl(mStatus, "Transaction::CommitRetain");
+    // Should be, better be sure
+    mHandle = 0;
+    mTra = nullptr;
 }
 
 void TransactionImplFb3::Rollback()
 {
-    if (mHandle == 0) return;   // Transaction not started anyway
+    // Transaction started?
+    if (mTra == nullptr)
+        return;   
 
-    IBS status;
-
-    (*getGDS().Call()->m_rollback_transaction)(status.Self(), &mHandle);
-    if (status.Errors())
-        throw SQLExceptionImpl(status, "Transaction::Rollback");
-    mHandle = 0;    // Should be, better be sure
-
-    /*
-    size_t i;
-    for (i = mStatements.size(); i != 0; i--)
-        mStatements[i-1]->CursorFree();
-    */
+    mTra->rollback(mStatus);
+    if (mStatus->isDirty())
+        throw SQLExceptionImpl(mStatus, "Transaction::Rollback");
+    // Should be, better be sure
+    mHandle = 0;    
+    mTra = nullptr;
 }
 
 void TransactionImplFb3::RollbackRetain()
 {
-    if (mHandle == 0)
+    if (mTra == nullptr)
         throw LogicExceptionImpl("Transaction::RollbackRetain", _("Transaction is not started."));
 
-    IBS status;
-
-    (*getGDS().Call()->m_rollback_retaining)(status.Self(), &mHandle);
-    if (status.Errors())
-        throw SQLExceptionImpl(status, "Transaction::RollbackRetain");
+    mTra->rollbackRetaining(mStatus);
+    if (mStatus->isDirty())
+        throw SQLExceptionImpl(mStatus, "Transaction::RollbackRetain");
+    // Should be, better be sure
+    mHandle = 0;
+    mTra = nullptr;
 }
 
 //  (((((((( OBJECT INTERNAL METHODS ))))))))
 
 void TransactionImplFb3::Init()
 {
+    IMaster* master = FactoriesImplFb3::gMaster;
+    mStatus = new CheckStatusWrapper(master->getStatus());
     mHandle = 0;
+    mTra = nullptr;
     mDatabases.clear();
     mTPBs.clear();
     mStatements.clear();
@@ -282,26 +280,26 @@ void TransactionImplFb3::AttachDatabaseImpl(DatabaseImplFb3* dbi,
     mDatabases.push_back(dbi);
 
     // Prepare a new TPB
-    TPB* tpb = new TPB;
-    if (am == IBPP::amRead) tpb->Insert(isc_tpb_read);
-    else tpb->Insert(isc_tpb_write);
+    TPBFb3* tpb = new TPBFb3;
+    if (am == IBPP::amRead) tpb->InsertTag(isc_tpb_read);
+    else tpb->InsertTag(isc_tpb_write);
 
     switch (il)
     {
-        case IBPP::ilConsistency :      tpb->Insert(isc_tpb_consistency); break;
-        case IBPP::ilReadDirty :        tpb->Insert(isc_tpb_read_committed);
-                                        tpb->Insert(isc_tpb_rec_version); break;
-        case IBPP::ilReadCommitted :    tpb->Insert(isc_tpb_read_committed);
-                                        tpb->Insert(isc_tpb_no_rec_version); break;
-        default :                       tpb->Insert(isc_tpb_concurrency); break;
+        case IBPP::ilConsistency :      tpb->InsertTag(isc_tpb_consistency); break;
+        case IBPP::ilReadDirty :        tpb->InsertTag(isc_tpb_read_committed);
+                                        tpb->InsertTag(isc_tpb_rec_version); break;
+        case IBPP::ilReadCommitted :    tpb->InsertTag(isc_tpb_read_committed);
+                                        tpb->InsertTag(isc_tpb_no_rec_version); break;
+        default :                       tpb->InsertTag(isc_tpb_concurrency); break;
     }
 
-    if (lr == IBPP::lrNoWait) tpb->Insert(isc_tpb_nowait);
-    else tpb->Insert(isc_tpb_wait);
+    if (lr == IBPP::lrNoWait) tpb->InsertTag(isc_tpb_nowait);
+    else tpb->InsertTag(isc_tpb_wait);
 
-    if (flags & IBPP::tfIgnoreLimbo)    tpb->Insert(isc_tpb_ignore_limbo);
-    if (flags & IBPP::tfAutoCommit)     tpb->Insert(isc_tpb_autocommit);
-    if (flags & IBPP::tfNoAutoUndo)     tpb->Insert(isc_tpb_no_auto_undo);
+    if (flags & IBPP::tfIgnoreLimbo)    tpb->InsertTag(isc_tpb_ignore_limbo);
+    if (flags & IBPP::tfAutoCommit)     tpb->InsertTag(isc_tpb_autocommit);
+    if (flags & IBPP::tfNoAutoUndo)     tpb->InsertTag(isc_tpb_no_auto_undo);
 
     mTPBs.push_back(tpb);
 
@@ -323,7 +321,7 @@ void TransactionImplFb3::DetachDatabaseImpl(DatabaseImplFb3* dbi)
     if (pos != mDatabases.end())
     {
         size_t index = pos - mDatabases.begin();
-        TPB* tpb = mTPBs[index];
+        TPBFb3* tpb = mTPBs[index];
         mDatabases.erase(pos);
         mTPBs.erase(mTPBs.begin()+index);
         delete tpb;
@@ -388,4 +386,6 @@ TransactionImplFb3::~TransactionImplFb3()
             //mDatabases.back()->DetachTransaction(this);
         }
     } catch (...) { }
+
+    delete mStatus;
 }

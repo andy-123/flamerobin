@@ -104,8 +104,9 @@ void DatabaseImplFb3::Connect()
     }
     // FIXME: remove m_get_database_handle call
     IBS status;
-    ISC_STATUS xStatus = 0;
-    FactoriesImplFb3::m_get_database_handle(&xStatus, &mHandle, mAtm);
+    FactoriesImplFb3::m_get_database_handle(status.Self(), &mHandle, mAtm);
+    if (status.Errors())
+        throw SQLExceptionImpl(status, "Database::Connect", _("fb_get_database_handle failed"));
 
     // Now, get ODS version information and dialect.
     // If ODS major is lower of equal to 9, we reject the connection.
@@ -508,9 +509,12 @@ isc_db_handle DatabaseImplFb3::GetHandle()
     if (mAtm == nullptr)
         return 0;
 
-    ISC_STATUS status = 0;
-    isc_db_handle h = 0;
-    FactoriesImplFb3::m_get_database_handle(&status, &h, mAtm);
+    isc_db_handle h;
+    IBS status;
+    FactoriesImplFb3::m_get_database_handle(status.Self(), &h, mAtm);
+    if (status.Errors())
+        throw SQLExceptionImpl(status, "Database::GetHandle", _("fb_get_database_handle failed"));
+
     return h;
 }
 
@@ -533,5 +537,6 @@ DatabaseImplFb3::~DatabaseImplFb3()
 {
     try { if (Connected()) Disconnect(); }
         catch(...) { }
+
     delete mStatus;
 }

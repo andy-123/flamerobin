@@ -81,7 +81,7 @@ bool FactoriesImplFb3::gAvailable = false;
 IMaster* FactoriesImplFb3::gMaster = nullptr;
 IUtil* FactoriesImplFb3::gUtil = nullptr;
 proto_get_database_handle* FactoriesImplFb3::m_get_database_handle = nullptr;
-
+proto_get_transaction_handle* FactoriesImplFb3::m_get_transaction_handle = nullptr;
 
 bool FactoriesImplFb3::gInit(ibpp_HMODULE h)
 {
@@ -90,14 +90,15 @@ bool FactoriesImplFb3::gInit(ibpp_HMODULE h)
 
     // FB3 +
     proto_get_master_interface* m_get_master_interface;
-    FB_ENTRYPOINT_NOTHROW(h, get_master_interface);
-    FB_ENTRYPOINT_NOTHROW(h, get_database_handle);
+    FB_LOADDYN_NOTHROW(h, get_master_interface);
 
     if (m_get_master_interface != nullptr)
     {
         gAvailable = true;
         gMaster = m_get_master_interface();
         gUtil = gMaster->getUtilInterface();
+        FB_LOADDYN(h, get_database_handle);
+        FB_LOADDYN(h, get_transaction_handle);
     }
 
     gIsInit = true;

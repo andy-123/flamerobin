@@ -23,6 +23,7 @@
 #endif
 
 #include "_ibpp.h"
+#include "fb1/ibppfb1.h"
 
 #ifdef HAS_HDRSTOP
 #pragma hdrstop
@@ -30,9 +31,9 @@
 
 using namespace ibpp_internals;
 
-const int TPB::BUFFERINCR = 128;
+const int TPBFb1::BUFFERINCR = 128;
 
-void TPB::Grow(int needed)
+void TPBFb1::Grow(int needed)
 {
 	if (mBuffer == 0) ++needed;	// Initial alloc will require one more byte
 	if ((mSize + needed) > mAlloc)
@@ -57,13 +58,13 @@ void TPB::Grow(int needed)
 	}
 }
 
-void TPB::Insert(char item)
+void TPBFb1::Insert(char item)
 {
 	Grow(1);
 	mBuffer[mSize++] = item;
 }
 
-void TPB::Insert(const std::string& data)
+void TPBFb1::Insert(const std::string& data)
 {
 	int len = (int)data.length();
 	Grow(1 + len);
@@ -72,7 +73,7 @@ void TPB::Insert(const std::string& data)
 	mSize += len;
 }
 
-void TPB::Reset()
+void TPBFb1::Reset()
 {
 	if (mSize != 0)
 	{

@@ -42,16 +42,11 @@ using namespace Firebird;
 
 class DPBFb3
 {
-    static const int BUFFERINCR;
-
     // Dynamically allocated DPB structure
     IXpbBuilder* mDPB;
     ThrowStatusWrapper* mStatus;
-    void Grow(int needed);      // Allocate or grow the mBuffer, so that
-                                // 'needed' bytes can be written (at least)
-
 public:
-    void InsertString(unsigned char tag, const char* str);
+    void InsertString(unsigned char tag, const std::string& str);
     //void Insert(char, int16_t);
     void InsertBool(unsigned char tag, bool data);
     //void Insert(char, char);
@@ -62,6 +57,26 @@ public:
 
     DPBFb3();
     ~DPBFb3();
+};
+
+//
+//  Transaction Parameter Block (used to define a transaction)
+//
+
+class TPBFb3
+{
+    // Dynamically allocated DPB structure
+    IXpbBuilder* mTPB;
+    ThrowStatusWrapper* mStatus;
+public:
+    void InsertTag(const unsigned char tag);
+    void InsertString(unsigned char tag, const std::string& str);
+    void Clear();
+    const unsigned char* GetBuffer();
+    unsigned GetBufferLength();
+
+    TPBFb3();
+    ~TPBFb3();
 };
 
 class ServiceImplFb3 : public IBPP::IService
@@ -176,6 +191,7 @@ public:
     // array-functions has no interface - to support this
     // we need the old isc_db_handle
     isc_db_handle GetHandle();
+    Firebird::IAttachment* GetFbIntf() { return mAtm; }
 
     void AttachTransactionImpl(TransactionImplFb3*);
     void DetachTransactionImpl(TransactionImplFb3*);
@@ -232,19 +248,22 @@ class TransactionImplFb3 : public IBPP::ITransaction
     //  (((((((( OBJECT INTERNALS ))))))))
 
 private:
+    CheckStatusWrapper* mStatus;
+    Firebird::ITransaction* mTra;
     isc_tr_handle mHandle;          // Transaction InterBase
 
     std::vector<DatabaseImplFb3*> mDatabases;      // Table of IDatabase*
     std::vector<StatementImplFb3*> mStatements;    // Table of IStatement*
     std::vector<BlobImplFb3*> mBlobs;              // Table of IBlob*
     std::vector<ArrayImplFb3*> mArrays;            // Table of Array*
-    std::vector<TPB*> mTPBs;                    // Table of TPB
+    std::vector<TPBFb3*> mTPBs;                    // Table of TPB
 
     void Init();            // A usage exclusif des constructeurs
 
 public:
     isc_tr_handle* GetHandlePtr() { return &mHandle; }
     isc_tr_handle GetHandle() { return mHandle; }
+    Firebird::ITransaction* GetFbIntf() { return mTra; }
 
     void AttachStatementImpl(StatementImplFb3*);
     void DetachStatementImpl(StatementImplFb3*);
@@ -772,6 +791,7 @@ private:
     static bool gAvailable;
 public:
     static proto_get_database_handle* m_get_database_handle;
+    static proto_get_transaction_handle* m_get_transaction_handle;
     static IMaster* gMaster;
     static IUtil* gUtil;
     static bool gInit(ibpp_HMODULE h);

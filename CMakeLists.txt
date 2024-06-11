@@ -310,12 +310,12 @@ list(APPEND IBPP_SOURCE_LIST
         ${SOURCEDIR}/ibpp/_ibs.cpp
         ${SOURCEDIR}/ibpp/_rb.cpp
         ${SOURCEDIR}/ibpp/_spb.cpp
-        ${SOURCEDIR}/ibpp/_tpb.cpp
         ${SOURCEDIR}/ibpp/baserefcount.cpp
         ${SOURCEDIR}/ibpp/date.cpp
         ${SOURCEDIR}/ibpp/dbkey.cpp
         ${SOURCEDIR}/ibpp/exception.cpp
         ${SOURCEDIR}/ibpp/fb1/_dpb1.cpp
+        ${SOURCEDIR}/ibpp/fb1/_tpb1.cpp
         ${SOURCEDIR}/ibpp/fb1/array1.cpp
         ${SOURCEDIR}/ibpp/fb1/blob1.cpp
         ${SOURCEDIR}/ibpp/fb1/database1.cpp
@@ -326,6 +326,7 @@ list(APPEND IBPP_SOURCE_LIST
         ${SOURCEDIR}/ibpp/fb1/statement1.cpp
         ${SOURCEDIR}/ibpp/fb1/transaction1.cpp
         ${SOURCEDIR}/ibpp/fb3/_dpb3.cpp
+        ${SOURCEDIR}/ibpp/fb3/_tpb3.cpp
         ${SOURCEDIR}/ibpp/fb3/array3.cpp
         ${SOURCEDIR}/ibpp/fb3/blob3.cpp
         ${SOURCEDIR}/ibpp/fb3/database3.cpp

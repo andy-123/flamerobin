@@ -69,7 +69,7 @@ void TransactionImplFb1::AddReservation(IBPP::Database db,
     if (pos != mDatabases.end())
     {
         size_t index = pos - mDatabases.begin();
-        TPB* tpb = mTPBs[index];
+        TPBFb1* tpb = mTPBs[index];
 
         // Now add the reservations to the TPB
         switch (tr)
@@ -282,7 +282,7 @@ void TransactionImplFb1::AttachDatabaseImpl(DatabaseImplFb1* dbi,
     mDatabases.push_back(dbi);
 
     // Prepare a new TPB
-    TPB* tpb = new TPB;
+    TPBFb1* tpb = new TPBFb1;
     if (am == IBPP::amRead) tpb->Insert(isc_tpb_read);
     else tpb->Insert(isc_tpb_write);
 
@@ -323,7 +323,7 @@ void TransactionImplFb1::DetachDatabaseImpl(DatabaseImplFb1* dbi)
     if (pos != mDatabases.end())
     {
         size_t index = pos - mDatabases.begin();
-        TPB* tpb = mTPBs[index];
+        TPBFb1* tpb = mTPBs[index];
         mDatabases.erase(pos);
         mTPBs.erase(mTPBs.begin()+index);
         delete tpb;

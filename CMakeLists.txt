@@ -310,6 +310,7 @@ list(APPEND IBPP_SOURCE_LIST
         ${SOURCEDIR}/ibpp/_ibs.cpp
         ${SOURCEDIR}/ibpp/_rb.cpp
         ${SOURCEDIR}/ibpp/_spb.cpp
+        ${SOURCEDIR}/ibpp/_utils.cpp
         ${SOURCEDIR}/ibpp/baserefcount.cpp
         ${SOURCEDIR}/ibpp/date.cpp
         ${SOURCEDIR}/ibpp/dbkey.cpp
@@ -324,6 +325,7 @@ list(APPEND IBPP_SOURCE_LIST
         ${SOURCEDIR}/ibpp/fb1/row1.cpp
         ${SOURCEDIR}/ibpp/fb1/service1.cpp
         ${SOURCEDIR}/ibpp/fb1/statement1.cpp
+        ${SOURCEDIR}/ibpp/fb1/utl1.cpp
         ${SOURCEDIR}/ibpp/fb1/transaction1.cpp
         ${SOURCEDIR}/ibpp/fb3/_dpb3.cpp
         ${SOURCEDIR}/ibpp/fb3/_tpb3.cpp
@@ -335,6 +337,7 @@ list(APPEND IBPP_SOURCE_LIST
         ${SOURCEDIR}/ibpp/fb3/row3.cpp
         ${SOURCEDIR}/ibpp/fb3/service3.cpp
         ${SOURCEDIR}/ibpp/fb3/statement3.cpp
+        ${SOURCEDIR}/ibpp/fb3/utl3.cpp
         ${SOURCEDIR}/ibpp/fb3/transaction3.cpp
         ${SOURCEDIR}/ibpp/fbinterfaces.cpp
         ${SOURCEDIR}/ibpp/ibint128.cpp
@@ -371,6 +374,7 @@ list(APPEND IBPP_HEADER_LIST
 		${SOURCEDIR}/firebird/include/firebird/IdlFbInterfaces.h
         ${SOURCEDIR}/ibpp/_ibpp.h
         ${SOURCEDIR}/ibpp/_ibppapi.h
+        ${SOURCEDIR}/ibpp/_utils.h
         ${SOURCEDIR}/ibpp/fb1/ibppfb1.h
         ${SOURCEDIR}/ibpp/fb3/ibppfb3.h
         ${SOURCEDIR}/ibpp/ibpp.h

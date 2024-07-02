@@ -304,36 +304,79 @@ public:
 class RowImplFb3 : public IBPP::IRow
 {
     //  (((((((( OBJECT INTERNALS ))))))))
+private:
+    typedef struct
+    {
+        bool vBool;
+        int16_t vInt16;
+        int32_t vInt32;
+        int64_t vInt64;
+        ibpp_int128_t vInt128;
+        float vFloat;
+        double vNumeric;
+        std::string vString;
+
+        // Was this column updated (Set()) ?
+        bool updated;
+
+        void SetBoolFromChar(char c);
+    } COLDATA;
+    typedef struct
+    {
+        // description
+        unsigned sqltype;
+        int sqlsubtype;
+        int sqlscale;
+        unsigned dataOffset;
+        unsigned notNullOffset;
+        char* dataPtr;
+        short* notNullPtr;
+        unsigned dataLength;
+        bool isNullable;
+        std::string fieldName;
+        std::string relationName;
+        std::string aliasName;
+        // temporary storage
+        COLDATA data;
+
+        bool GetIsNull() { return *notNullPtr != 0; }
+        void SetIsNull(bool value) { *notNullPtr = (value = true ? -1 : 0); }
+    } COLINFO, *PCOLINFO;
 
 private:
-    XSQLDA* mDescrArea;             // XSQLDA descriptor itself
-    std::vector<double> mNumerics;  // Temporary storage for Numerics
-    std::vector<float> mFloats;     // Temporary storage for Floats
-    std::vector<int64_t> mInt64s;   // Temporary storage for 64 bits
-    std::vector<int32_t> mInt32s;   // Temporary storage for 32 bits
-    std::vector<int16_t> mInt16s;   // Temporary storage for 16 bits
-    std::vector<char> mBools;       // Temporary storage for Bools
-    std::vector<std::string> mStrings;  // Temporary storage for Strings
-    std::vector<bool> mUpdated;     // Which columns where updated (Set()) ?
+    Firebird::ThrowStatusWrapper* mThrowStatus;
+    Firebird::IMessageMetadata *mMeta;
+    // prefetched meta-info
+    unsigned mBufferLength;
+    // buffer
+    char* mBuffer;
+
+    std::vector<COLINFO> mColumns;
+    unsigned mColCount;
 
     int mDialect;                   // Related database dialect
     DatabaseImplFb3* mDatabase;        // Related Database (important for Blobs, ...)
     TransactionImplFb3* mTransaction;  // Related Transaction (same remark)
 
+    inline void CheckIsInit(const char* callername);
+    inline void CheckColnum(const char* callername, int colnum);
     void SetValue(int, IITYPE, const void* value, int = 0);
     void* GetValue(int, IITYPE, void* = 0);
+    void FreeBuffer();
 
 public:
-    void Free();
-    short AllocatedSize() { return mDescrArea->sqln; }
-    void Resize(int n);
-    void AllocVariables();
-    bool MissingValues();       // Returns wether one of the mMissing[] is true
-    XSQLDA* Self() { return mDescrArea; }
+    // Returns wether one of the mMissing[] is true
+    bool MissingValues();       
+    char* GetBuffer() { return mBuffer; }
+    unsigned GetBufferLength() { return mBufferLength; }
+
+    void SetFbIntfMeta(Firebird::IMessageMetadata* meta);
+    Firebird::IMessageMetadata* GetFbIntfMeta() { return mMeta; }
 
     RowImplFb3& operator=(const RowImplFb3& copied);
+
     RowImplFb3(const RowImplFb3& copied);
-    RowImplFb3(int dialect, int size, DatabaseImplFb3* db, TransactionImplFb3* tr);
+    RowImplFb3(int dialect, DatabaseImplFb3* db, TransactionImplFb3* tr);
     ~RowImplFb3();
 
     //  (((((((( OBJECT INTERFACE ))))))))
@@ -424,24 +467,24 @@ class StatementImplFb3 : public IBPP::IStatement
 private:
     friend class TransactionImplFb3;
 
-    isc_stmt_handle mHandle;    // Statement Handle
+    CheckStatusWrapper* mStatus;
+    Firebird::IStatement* mStm;
+    Firebird::IResultSet* mRes;
 
     DatabaseImplFb3* mDatabase;        // Attached database
     TransactionImplFb3* mTransaction;  // Attached transaction
     RowImplFb3* mInRow;
-    //bool* mInMissing;         // Quels paramètres n'ont pas été spécifiés
     RowImplFb3* mOutRow;
-    bool mResultSetAvailable;   // Executed and result set is available
-    bool mCursorOpened;         // dsql_set_cursor_name was called
     IBPP::STT mType;            // Type de requète
     std::string mSql;           // Last SQL statement prepared or executed
 
     // Internal Methods
+    inline void CheckIsInit(const char* callername);
     void CursorFree();
 
 public:
     // Properties and Attributes Access Methods
-    isc_stmt_handle GetHandle() { return mHandle; }
+    Firebird::IStatement* GetFbIntf() { return mStm; }
 
     void AttachDatabaseImpl(DatabaseImplFb3*);
     void DetachDatabaseImpl();
@@ -766,6 +809,33 @@ public:
     IBPP::Database DatabasePtr() const;
 };
 
+namespace ibpp_internals
+{
+    /* internal class */
+    class UtlFb3
+    {
+    private:
+        Firebird::ThrowStatusWrapper* mThrowStatus;
+        Firebird::IUtil* mUtil;
+    public:
+        UtlFb3();
+        ~UtlFb3();
+
+        void encodeDate(ISC_DATE& isc_dt, const IBPP::Date& dt);
+        void decodeDate(IBPP::Date& dt, const ISC_DATE& isc_dt);
+
+        void encodeTime(ISC_TIME& isc_tm, const IBPP::Time& tm);
+        void decodeTime(IBPP::Time& tm, const ISC_TIME& isc_tm);
+
+        void decodeTimeTz(IBPP::Time& tm, const ISC_TIME_TZ& isc_tm);
+
+        void encodeTimestamp(ISC_TIMESTAMP& isc_ts, const IBPP::Timestamp& ts);
+        void decodeTimestamp(IBPP::Timestamp& ts, const ISC_TIMESTAMP& isc_ts);
+
+        void decodeTimestampTz(IBPP::Timestamp& ts, const ISC_TIMESTAMP_TZ& isc_ts);
+    };
+}
+
 class FactoriesImplFb3 : public IFactories
 {
 public:
@@ -792,8 +862,11 @@ private:
 public:
     static proto_get_database_handle* m_get_database_handle;
     static proto_get_transaction_handle* m_get_transaction_handle;
+    // firebird 3+ interfaces
     static IMaster* gMaster;
     static IUtil* gUtil;
+    // internal ibpp utils fb3+
+    static ibpp_internals::UtlFb3* gUtlFb3;
     static bool gInit(ibpp_HMODULE h);
 };
 

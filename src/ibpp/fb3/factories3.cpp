@@ -82,6 +82,8 @@ IMaster* FactoriesImplFb3::gMaster = nullptr;
 IUtil* FactoriesImplFb3::gUtil = nullptr;
 proto_get_database_handle* FactoriesImplFb3::m_get_database_handle = nullptr;
 proto_get_transaction_handle* FactoriesImplFb3::m_get_transaction_handle = nullptr;
+// inernal IBPP-Utils (fb3+)
+UtlFb3* FactoriesImplFb3::gUtlFb3 = nullptr;
 
 bool FactoriesImplFb3::gInit(ibpp_HMODULE h)
 {

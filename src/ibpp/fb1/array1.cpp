@@ -497,7 +497,7 @@ void ArrayImplFb1::ReadTo(IBPP::ADT adtype, void* data, int datacount)
 												_("Incompatible types."));
 			for (int i = 0; i < mElemCount; i++)
 			{
-				decodeTimestamp(*(IBPP::Timestamp*)dst, *(ISC_TIMESTAMP*)src);
+				utlfb1::decodeTimestamp(*(IBPP::Timestamp*)dst, *(ISC_TIMESTAMP*)src);
 				src += mElemSize;
 				dst += sizeof(IBPP::Timestamp);
 			}
@@ -508,7 +508,7 @@ void ArrayImplFb1::ReadTo(IBPP::ADT adtype, void* data, int datacount)
 												_("Incompatible types."));
 			for (int i = 0; i < mElemCount; i++)
 			{
-				decodeDate(*(IBPP::Date*)dst, *(ISC_DATE*)src);
+				utlfb1::decodeDate(*(IBPP::Date*)dst, *(ISC_DATE*)src);
 				src += mElemSize;
 				dst += sizeof(IBPP::Date);
 			}
@@ -519,7 +519,7 @@ void ArrayImplFb1::ReadTo(IBPP::ADT adtype, void* data, int datacount)
 												_("Incompatible types."));
 			for (int i = 0; i < mElemCount; i++)
 			{
-				decodeTime(*(IBPP::Time*)dst, *(ISC_TIME*)src);
+				utlfb1::decodeTime(*(IBPP::Time*)dst, *(ISC_TIME*)src);
 				src += mElemSize;
 				dst += sizeof(IBPP::Time);
 			}
@@ -846,7 +846,7 @@ void ArrayImplFb1::WriteFrom(IBPP::ADT adtype, const void* data, int datacount)
 												_("Incompatible types."));
 			for (int i = 0; i < mElemCount; i++)
 			{
-				encodeTimestamp(*(ISC_TIMESTAMP*)dst, *(IBPP::Timestamp*)src);
+				utlfb1::encodeTimestamp(*(ISC_TIMESTAMP*)dst, *(IBPP::Timestamp*)src);
 				src += sizeof(IBPP::Timestamp);
 				dst += mElemSize;
 			}
@@ -857,7 +857,7 @@ void ArrayImplFb1::WriteFrom(IBPP::ADT adtype, const void* data, int datacount)
 												_("Incompatible types."));
 			for (int i = 0; i < mElemCount; i++)
 			{
-				encodeDate(*(ISC_DATE*)dst, *(IBPP::Date*)src);
+				utlfb1::encodeDate(*(ISC_DATE*)dst, *(IBPP::Date*)src);
 				src += sizeof(IBPP::Date);
 				dst += mElemSize;
 			}
@@ -868,7 +868,7 @@ void ArrayImplFb1::WriteFrom(IBPP::ADT adtype, const void* data, int datacount)
 												_("Incompatible types."));
 			for (int i = 0; i < mElemCount; i++)
 			{
-				encodeTime(*(ISC_TIME*)dst, *(IBPP::Time*)src);
+				utlfb1::encodeTime(*(ISC_TIME*)dst, *(IBPP::Time*)src);
 				src += sizeof(IBPP::Time);
 				dst += mElemSize;
 			}

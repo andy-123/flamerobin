@@ -67,6 +67,8 @@ namespace ibpp_internals
 	const int16_t consts::max16 = std::numeric_limits<int16_t>::max();
 	const int32_t consts::min32 = std::numeric_limits<int32_t>::min();
 	const int32_t consts::max32 = std::numeric_limits<int32_t>::max();
+	const int64_t consts::min64 = std::numeric_limits<int64_t>::min();
+	const int64_t consts::max64 = std::numeric_limits<int64_t>::max();
 
     FBCLIENT gds;	// Global unique GDS instance
 

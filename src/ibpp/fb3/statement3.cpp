@@ -38,640 +38,519 @@ using namespace ibpp_internals;
 
 //	(((((((( OBJECT INTERFACE IMPLEMENTATION ))))))))
 
+void StatementImplFb3::CheckIsInit(const char* callername)
+{
+    if (mStm == nullptr)
+        throw LogicExceptionImpl(callername, _("No statement has been prepared."));
+}
+
 void StatementImplFb3::Prepare(const std::string& sql)
 {
-	if (mDatabase == 0)
-		throw LogicExceptionImpl("Statement::Prepare", _("An IDatabase must be attached."));
-	if (mDatabase->GetHandle() == 0)
-		throw LogicExceptionImpl("Statement::Prepare", _("IDatabase must be connected."));
-	if (mTransaction == 0)
-		throw LogicExceptionImpl("Statement::Prepare", _("An ITransaction must be attached."));
-	if (mTransaction->GetHandle() == 0)
-		throw LogicExceptionImpl("Statement::Prepare", _("ITransaction must be started."));
-	if (sql.empty())
-		throw LogicExceptionImpl("Statement::Prepare", _("SQL statement can't be 0."));
+    if (mDatabase == 0)
+        throw LogicExceptionImpl("Statement::Prepare", _("An IDatabase must be attached."));
+    if (mDatabase->GetFbIntf() == 0)
+        throw LogicExceptionImpl("Statement::Prepare", _("IDatabase must be connected."));
+    if (mTransaction == 0)
+        throw LogicExceptionImpl("Statement::Prepare", _("An ITransaction must be attached."));
+    if (mTransaction->GetFbIntf() == 0)
+        throw LogicExceptionImpl("Statement::Prepare", _("ITransaction must be started."));
+    if (sql.empty())
+        throw LogicExceptionImpl("Statement::Prepare", _("SQL statement can't be 0."));
 
-	// Saves the SQL sentence, only for reporting reasons in case of errors
-	mSql = ParametersParser(sql);
+    // Saves the SQL sentence, only for reporting reasons in case of errors
+    mSql = ParametersParser(sql);
 
-	IBS status;
+    // Free all resources currently attached to this Statement, then allocate
+    // a new statement descriptor.
+    Close();
 
-	// Free all resources currently attached to this Statement, then allocate
-	// a new statement descriptor.
-	Close();
-	(*getGDS().Call()->m_dsql_allocate_statement)(status.Self(), mDatabase->GetHandlePtr(), &mHandle);
-	if (status.Errors())
-		throw SQLExceptionImpl(status, "Statement::Prepare",
-			_("isc_dsql_allocate_statement failed"));
+    Firebird::IAttachment* atm = mDatabase->GetFbIntf();
+    Firebird::ITransaction* tra = mTransaction->GetFbIntf();
+    mStm = atm->prepare(mStatus, tra, 0, mSql.c_str(),
+                        mDatabase->Dialect(),
+                        Firebird::IStatement::PREPARE_PREFETCH_METADATA);
+    if (mStatus->isDirty())
+    {
+        Close();
+        std::string context = "Statement::Prepare( ";
+        context.append(mSql).append(" )");
+        throw SQLExceptionImpl(mStatus, context.c_str(),
+                               _("isc_dsql_prepare failed"));
+    }
 
-	// Empirical estimate of parameters count and output columns count.
-	// This is by far not an exact estimation, which would require parsing the
-	// SQL statement. If the SQL statement contains '?' and ',' in string
-	// constants, this count will obviously be wrong, but it will be exagerated.
-	// It won't hurt. We just try to not have to re-allocate those descriptors later.
-	// So we prefer to get them a little bit larger than needed than the other way.
-	int16_t inEstimate = 0;
-	int16_t outEstimate = 1;
-	size_t len = strlen(mSql.c_str());
-	for (size_t i = 0; i < len; i++)
-	{
-		if (mSql[i] == '?') ++inEstimate;
-		if (mSql[i] == ',') ++outEstimate;
-	}
+    // Read what kind of statement was prepared
+    unsigned stmType = mStm->getType(mStatus);
+    if (mStatus->isDirty())
+    {
+        Close();
+        throw SQLExceptionImpl(mStatus, "Statement::Prepare",
+                               _("isc_dsql_sql_info failed"));
+    }
+    switch (stmType)
+    {
+        case isc_info_sql_stmt_select : mType = IBPP::stSelect; break;
+        case isc_info_sql_stmt_insert : mType = IBPP::stInsert; break;
+        case isc_info_sql_stmt_update : mType = IBPP::stUpdate; break;
+        case isc_info_sql_stmt_delete : mType = IBPP::stDelete; break;
+        case isc_info_sql_stmt_ddl :    mType = IBPP::stDDL; break;
+        case isc_info_sql_stmt_exec_procedure : mType = IBPP::stExecProcedure; break;
+        case isc_info_sql_stmt_start_trans: mType = IBPP::stStartTransaction; break;
+        case isc_info_sql_stmt_commit:  mType = IBPP::stCommitTransaction; break;
+        case isc_info_sql_stmt_rollback:    mType = IBPP::stRollbackTransaction; break;
+        case isc_info_sql_stmt_select_for_upd : mType = IBPP::stSelectUpdate; break;
+        case isc_info_sql_stmt_set_generator : mType = IBPP::stSetGenerator; break;
+        case isc_info_sql_stmt_savepoint : mType = IBPP::stSavePoint; break;
+        default : mType = IBPP::stUnsupported;
+    }
+    if (mType == IBPP::stUnknown || mType == IBPP::stUnsupported)
+    {
+        Close();
+        throw LogicExceptionImpl("Statement::Prepare",
+                                 _("Unknown or unsupported statement type"));
+    }
 
-	/*
-	DebugStream()<< "Prepare(\""<< mSql<< "\")"<< fds;
-	DebugStream()<< _("Estimation: ")<< inEstimate<< _(" IN parameters and ")
-			<< outEstimate<< _(" OUT columns")<< fds;
-	*/
+    Firebird::IMessageMetadata* metaOut = nullptr;
+    metaOut = mStm->getOutputMetadata(mStatus);
+    if (mStatus->isDirty())
+    {
+        Close();
+        throw SQLExceptionImpl(mStatus, "Statement::Prepare",
+                               _("IStatement::getInputMetadata failed"));
+    }
+    mOutRow = new RowImplFb3(mDatabase->Dialect(), mDatabase, mTransaction);
+    mOutRow->SetFbIntfMeta(metaOut);
 
-	// Allocates output descriptor and prepares the statement
-	mOutRow = new RowImplFb3(mDatabase->Dialect(), outEstimate, mDatabase, mTransaction);
-	mOutRow->AddRef();
+    if (mOutRow->Columns() == 0)
+    {
+        // Get rid of the output descriptor, if it wasn't required (no output)
+        mOutRow->Release();
+        mOutRow = nullptr;
+    }
 
-	status.Reset();
-	(*getGDS().Call()->m_dsql_prepare)(status.Self(), mTransaction->GetHandlePtr(),
-		&mHandle, 0, const_cast<char*>(mSql.c_str()),
-			short(mDatabase->Dialect()), mOutRow->Self());
-	if (status.Errors())
-	{
-		Close();
-		std::string context = "Statement::Prepare( ";
-		context.append(mSql).append(" )");
-		throw SQLExceptionImpl(status, context.c_str(),
-			_("isc_dsql_prepare failed"));
-	}
+    Firebird::IMessageMetadata* metaIn = nullptr;
+    metaIn = mStm->getInputMetadata(mStatus);
+    if (mStatus->isDirty())
+    {
+        Close();
+        throw SQLExceptionImpl(mStatus, "Statement::Prepare",
+                               _("IStatement::getOutputMetadata failed"));
+    }
 
-	// Read what kind of statement was prepared
-	status.Reset();
-	char itemsReq[] = {isc_info_sql_stmt_type};
-	char itemsRes[8];
-	(*getGDS().Call()->m_dsql_sql_info)(status.Self(), &mHandle, 1, itemsReq,
-		sizeof(itemsRes), itemsRes);
-	if (status.Errors())
-	{
-		Close();
-		throw SQLExceptionImpl(status, "Statement::Prepare",
-			_("isc_dsql_sql_info failed"));
-	}
-	if (itemsRes[0] == isc_info_sql_stmt_type)
-	{
-		switch (itemsRes[3])
-		{
-			case isc_info_sql_stmt_select :		mType = IBPP::stSelect; break;
-			case isc_info_sql_stmt_insert :		mType = IBPP::stInsert; break;
-			case isc_info_sql_stmt_update :		mType = IBPP::stUpdate; break;
-			case isc_info_sql_stmt_delete :		mType = IBPP::stDelete; break;
-			case isc_info_sql_stmt_ddl :		mType = IBPP::stDDL; break;
-			case isc_info_sql_stmt_exec_procedure :	mType = IBPP::stExecProcedure; break;
-			case isc_info_sql_stmt_start_trans:	mType = IBPP::stStartTransaction; break;
-			case isc_info_sql_stmt_commit:		mType = IBPP::stCommitTransaction; break;
-			case isc_info_sql_stmt_rollback:	mType = IBPP::stRollbackTransaction; break;
-			case isc_info_sql_stmt_select_for_upd : mType = IBPP::stSelectUpdate; break;
-			case isc_info_sql_stmt_set_generator :	mType = IBPP::stSetGenerator; break;
-			case isc_info_sql_stmt_savepoint :	mType = IBPP::stSavePoint; break;
-			default : mType = IBPP::stUnsupported;
-		}
-	}
-	if (mType == IBPP::stUnknown || mType == IBPP::stUnsupported)
-	{
-		Close();
-		throw LogicExceptionImpl("Statement::Prepare",
-			_("Unknown or unsupported statement type"));
-	}
-
-	if (mOutRow->Columns() == 0)
-	{
-		// Get rid of the output descriptor, if it wasn't required (no output)
-		mOutRow->Release();
-		mOutRow = 0;
-		/*
-		DebugStream()<< _("Dropped output descriptor which was not required")<< fds;
-		*/
-	}
-	else if (mOutRow->Columns() > mOutRow->AllocatedSize())
-	{
-		// Resize the output descriptor (which is too small).
-		// The statement does not need to be prepared again, though the
-		// output columns must be described again.
-
-		/*
-		DebugStream()<< _("Resize output descriptor from ")
-			<< mOutRow->AllocatedSize()<< _(" to ")<< mOutRow->Columns()<< fds;
-		*/
-
-		mOutRow->Resize(mOutRow->Columns());
-		status.Reset();
-		(*getGDS().Call()->m_dsql_describe)(status.Self(), &mHandle, 1, mOutRow->Self());
-		if (status.Errors())
-		{
-			Close();
-			throw SQLExceptionImpl(status, "Statement::Prepare",
-				_("isc_dsql_describe failed"));
-		}
-	}
-
-	if (inEstimate > 0)
-	{
-		// Ready an input descriptor
-		mInRow = new RowImplFb3(mDatabase->Dialect(), inEstimate, mDatabase, mTransaction);
-		mInRow->AddRef();
-
-		status.Reset();
-		(*getGDS().Call()->m_dsql_describe_bind)(status.Self(), &mHandle, 1, mInRow->Self());
-		if (status.Errors())
-		{
-			Close();
-			throw SQLExceptionImpl(status, "Statement::Prepare",
-				_("isc_dsql_describe_bind failed"));
-		}
-
-		if (mInRow->Columns() == 0)
-		{
-			// Get rid of the input descriptor, if it wasn't required (no parameters)
-			mInRow->Release();
-			mInRow = 0;
-			/*
-			DebugStream()<< _("Dropped input descriptor which was not required")<< fds;
-			*/
-		}
-		else if (mInRow->Columns() > mInRow->AllocatedSize())
-		{
-			// Resize the input descriptor (which is too small).
-			// The statement does not need to be prepared again, though the
-			// parameters must be described again.
-
-			/*
-			DebugStream()<< _("Resize input descriptor from ")
-					<< mInRow->AllocatedSize()<< _(" to ")
-					<< mInRow->Columns()<< fds;
-			*/
-
-			mInRow->Resize(mInRow->Columns());
-			status.Reset();
-			(*getGDS().Call()->m_dsql_describe_bind)(status.Self(), &mHandle, 1, mInRow->Self());
-			if (status.Errors())
-			{
-				Close();
-				throw SQLExceptionImpl(status, "Statement::Prepare",
-					_("isc_dsql_describe_bind failed"));
-			}
-		}
-	}
-
-	// Allocates variables of the input descriptor
-	if (mInRow != 0)
-	{
-		// Turn on 'can be NULL' on each input parameter
-		for (int i = 0; i < mInRow->Columns(); i++)
-		{
-			XSQLVAR* var = &(mInRow->Self()->sqlvar[i]);
-			if (! (var->sqltype & 1)) var->sqltype += short(1);
-		}
-		mInRow->AllocVariables();
-	}
-
-	// Allocates variables of the output descriptor
-	if (mOutRow != 0) mOutRow->AllocVariables();
+    mInRow = new RowImplFb3(mDatabase->Dialect(), mDatabase, mTransaction);
+    mInRow->SetFbIntfMeta(metaIn);
+    if (mInRow->Columns() == 0)
+    {
+        mInRow->Release();
+        mInRow = nullptr;
+    }
 }
 
 void StatementImplFb3::Plan(std::string& plan)
 {
-	if (mHandle == 0)
-		throw LogicExceptionImpl("Statement::Plan", _("No statement has been prepared."));
-	if (mDatabase == 0)
-		throw LogicExceptionImpl("Statement::Plan", _("A Database must be attached."));
-	if (mDatabase->GetHandle() == 0)
-		throw LogicExceptionImpl("Statement::Plan", _("Database must be connected."));
+    if (mStm == nullptr)
+        throw LogicExceptionImpl("Statement::Plan", _("No statement has been prepared."));
+    if (mDatabase == 0)
+        throw LogicExceptionImpl("Statement::Plan", _("A Database must be attached."));
+    if (mDatabase->GetFbIntf() == 0)
+        throw LogicExceptionImpl("Statement::Plan", _("Database must be connected."));
 
-	IBS status;
-	RB result(65535);
-	char itemsReq[] = {isc_info_sql_get_plan};
-
-	(*getGDS().Call()->m_dsql_sql_info)(status.Self(), &mHandle, 1, itemsReq,
-								   result.Size(), result.Self());
-	if (status.Errors()) throw SQLExceptionImpl(status,
-								"Statement::Plan", _("isc_dsql_sql_info failed."));
-
-	result.GetString(isc_info_sql_get_plan, plan);
-	if (plan[0] == '\n') plan.erase(0, 1);
+    const char* cplan = mStm->getPlan(mStatus, FB_FALSE);
+    if (cplan != nullptr)
+    {
+        plan = cplan;
+        if (plan[0] == '\n')
+            plan.erase(0, 1);
+    }
+    else
+        plan.erase();
 }
 
 void StatementImplFb3::Execute(const std::string& sql)
 {
-	if (! sql.empty()) Prepare(sql);
+    if (!sql.empty())
+        Prepare(sql);
 
-	if (mHandle == 0)
-		throw LogicExceptionImpl("Statement::Execute",
-			_("No statement has been prepared."));
+    if (mStm == nullptr)
+        throw LogicExceptionImpl("Statement::Execute",
+                                 _("No statement has been prepared."));
 
-	// Check that a value has been set for each input parameter
-	if (mInRow != 0 && mInRow->MissingValues())
-		throw LogicExceptionImpl("Statement::Execute",
-			_("All parameters must be specified."));
+    // Check that a value has been set for each input parameter
+    if ((mInRow != nullptr) && (mInRow->MissingValues()))
+        throw LogicExceptionImpl("Statement::Execute",
+                                 _("All parameters must be specified."));
 
-	CursorFree();	// Free a previous 'cursor' if any
+    // Free a previous 'cursor' if any
+    CursorFree();
 
-	IBS status;
-	if (mType == IBPP::stSelect)
-	{
-		// Could return a result set (none, single or multi rows)
-		(*getGDS().Call()->m_dsql_execute)(status.Self(), mTransaction->GetHandlePtr(),
-			&mHandle, 1, mInRow == 0 ? 0 : mInRow->Self());
-		if (status.Errors())
-		{
-			//Close();	Commented because Execute error should not free the statement
-			std::string context = "Statement::Execute( ";
-			context.append(mSql).append(" )");
-			throw SQLExceptionImpl(status, context.c_str(),
-				_("isc_dsql_execute failed"));
-		}
-		if (mOutRow != 0) mResultSetAvailable = true;
-	}
-	else
-	{
-		// Should return at most a single row
-		(*getGDS().Call()->m_dsql_execute2)(status.Self(), mTransaction->GetHandlePtr(),
-			&mHandle, 1, mInRow == 0 ? 0 : mInRow->Self(),
-			mOutRow == 0 ? 0 : mOutRow->Self());
-		if (status.Errors())
-		{
-			//Close();	Commented because Execute error should not free the statement
-			std::string context = "Statement::Execute( ";
-			context.append(mSql).append(" )");
-			throw SQLExceptionImpl(status, context.c_str(),
-				_("isc_dsql_execute2 failed"));
-		}
-	}
+    Firebird::ITransaction* tra = mTransaction->GetFbIntf();
+    char* metaInBuf = nullptr;
+    char* metaOutBuf = nullptr;
+    Firebird::IMessageMetadata* metaIn = nullptr;
+    Firebird::IMessageMetadata* metaOut = nullptr;
+    if (mInRow != nullptr)
+    {
+        metaIn = mInRow->GetFbIntfMeta();
+        metaInBuf = mInRow->GetBuffer();
+    }
+    if (mOutRow != nullptr)
+    {
+        metaOut = mOutRow->GetFbIntfMeta();
+        metaOutBuf = mOutRow->GetBuffer();
+    }
+
+    if (mType == IBPP::stSelect)
+    {
+        // Could return a result set (none, single or multi rows)
+        mRes = mStm->openCursor(mStatus, tra, metaIn, metaInBuf,
+                                metaOut, 0);
+        if (mStatus->isDirty())
+        {
+            //Close();	Commented because Execute error should not free the statement
+            std::string context = "Statement::Execute( ";
+            context.append(mSql).append(" )");
+            throw SQLExceptionImpl(mStatus, context.c_str(),
+                                   _("isc_dsql_execute failed"));
+        }
+    }
+    else
+    {
+        // Can return at a single or mutiple rows
+        mStm->execute(mStatus, tra, metaIn, metaInBuf,
+                      metaOut, metaOutBuf);
+        if (mStatus->isDirty())
+        {
+            //Close();	Commented because Execute error should not free the statement
+            std::string context = "Statement::Execute( ";
+            context.append(mSql).append(" )");
+            throw SQLExceptionImpl(mStatus, context.c_str(),
+                _("isc_dsql_execute2 failed"));
+        }
+    }
 }
 
 void StatementImplFb3::CursorExecute(const std::string& cursor, const std::string& sql)
 {
-	if (cursor.empty())
-		throw LogicExceptionImpl("Statement::CursorExecute", _("Cursor name can't be 0."));
+    if (cursor.empty())
+        throw LogicExceptionImpl("Statement::CursorExecute", _("Cursor name can't be 0."));
 
-	if (! sql.empty()) Prepare(sql);
+    if (!sql.empty())
+        Prepare(sql);
 
-	if (mHandle == 0)
-		throw LogicExceptionImpl("Statement::CursorExecute", _("No statement has been prepared."));
-	if (mType != IBPP::stSelectUpdate)
-		throw LogicExceptionImpl("Statement::CursorExecute", _("Statement must be a SELECT FOR UPDATE."));
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::CursorExecute", _("Statement would return no rows."));
+    if (mStm == nullptr)
+        throw LogicExceptionImpl("Statement::CursorExecute", _("No statement has been prepared."));
+    if (mType != IBPP::stSelectUpdate)
+        throw LogicExceptionImpl("Statement::CursorExecute", _("Statement must be a SELECT FOR UPDATE."));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::CursorExecute", _("Statement would return no rows."));
 
-	// Check that a value has been set for each input parameter
-	if (mInRow != 0 && mInRow->MissingValues())
-		throw LogicExceptionImpl("Statement::CursorExecute",
-			_("All parameters must be specified."));
+    // Check that a value has been set for each input parameter
+    if (mInRow != 0 && mInRow->MissingValues())
+        throw LogicExceptionImpl("Statement::CursorExecute",
+            _("All parameters must be specified."));
 
-	CursorFree();	// Free a previous 'cursor' if any
+    CursorFree(); // Free a previous 'cursor' if any
 
-	IBS status;
-	(*getGDS().Call()->m_dsql_execute)(status.Self(), mTransaction->GetHandlePtr(),
-		&mHandle, 1, mInRow == 0 ? 0 : mInRow->Self());
-	if (status.Errors())
-	{
-		//Close();	Commented because Execute error should not free the statement
-		std::string context = "Statement::CursorExecute( ";
-		context.append(mSql).append(" )");
-		throw SQLExceptionImpl(status, context.c_str(),
-			_("isc_dsql_execute failed"));
-	}
+    Firebird::ITransaction* tra = mTransaction->GetFbIntf();
+    char* metaInBuf = nullptr;
+    Firebird::IMessageMetadata* metaIn = nullptr;
+    Firebird::IMessageMetadata* metaOut = nullptr;
+    if (mInRow != nullptr)
+    {
+        metaIn = mInRow->GetFbIntfMeta();
+        metaInBuf = mInRow->GetBuffer();
+    }
+    if (mOutRow != nullptr)
+        metaOut = mOutRow->GetFbIntfMeta();
+    mRes = mStm->openCursor(mStatus, tra, metaIn, metaInBuf,
+                            metaOut, 0);
+    if (mStatus->isDirty())
+    {
+        //Close();	Commented because Execute error should not free the statement
+        std::string context = "Statement::CursorExecute( ";
+        context.append(mSql).append(" )");
+        throw SQLExceptionImpl(mStatus, context.c_str(),
+            _("isc_dsql_execute failed"));
+    }
 
-	status.Reset();
-	(*getGDS().Call()->m_dsql_set_cursor_name)(status.Self(), &mHandle, const_cast<char*>(cursor.c_str()), 0);
-	if (status.Errors())
-	{
-		//Close();	Commented because Execute error should not free the statement
-		throw SQLExceptionImpl(status, "Statement::CursorExecute",
-			_("isc_dsql_set_cursor_name failed"));
-	}
-
-	mResultSetAvailable = true;
-	mCursorOpened = true;
+    mStm->setCursorName(mStatus, const_cast<char*>(cursor.c_str()));
+    if (mStatus->isDirty())
+    {
+        //Close();	Commented because Execute error should not free the statement
+        throw SQLExceptionImpl(mStatus, "Statement::CursorExecute",
+            _("isc_dsql_set_cursor_name failed"));
+    }
 }
 
 void StatementImplFb3::ExecuteImmediate(const std::string& sql)
 {
-	if (mDatabase == 0)
-		throw LogicExceptionImpl("Statement::ExecuteImmediate", _("An IDatabase must be attached."));
-	if (mDatabase->GetHandle() == 0)
-		throw LogicExceptionImpl("Statement::ExecuteImmediate", _("IDatabase must be connected."));
-	if (mTransaction == 0)
-		throw LogicExceptionImpl("Statement::ExecuteImmediate", _("An ITransaction must be attached."));
-	if (mTransaction->GetHandle() == 0)
-		throw LogicExceptionImpl("Statement::ExecuteImmediate", _("ITransaction must be started."));
-	if (sql.empty())
-		throw LogicExceptionImpl("Statement::ExecuteImmediate", _("SQL statement can't be 0."));
+    if (mDatabase == 0)
+        throw LogicExceptionImpl("Statement::ExecuteImmediate", _("An IDatabase must be attached."));
+    if (mDatabase->GetFbIntf() == 0)
+        throw LogicExceptionImpl("Statement::ExecuteImmediate", _("IDatabase must be connected."));
+    if (mTransaction == 0)
+        throw LogicExceptionImpl("Statement::ExecuteImmediate", _("An ITransaction must be attached."));
+    if (mTransaction->GetFbIntf() == 0)
+        throw LogicExceptionImpl("Statement::ExecuteImmediate", _("ITransaction must be started."));
+    if (sql.empty())
+        throw LogicExceptionImpl("Statement::ExecuteImmediate", _("SQL statement can't be 0."));
 
-	IBS status;
-	Close();
-    (*getGDS().Call()->m_dsql_execute_immediate)(status.Self(), mDatabase->GetHandlePtr(),
-    	mTransaction->GetHandlePtr(), 0, const_cast<char*>(sql.c_str()),
-    		short(mDatabase->Dialect()), 0);
-    if (status.Errors())
-	{
-		std::string context = "Statement::ExecuteImmediate( ";
-		context.append(sql).append(" )");
-		throw SQLExceptionImpl(status, context.c_str(),
-			_("isc_dsql_execute_immediate failed"));
-	}
+    Firebird::IAttachment* atm = mDatabase->GetFbIntf();
+    Firebird::ITransaction* tra = mTransaction->GetFbIntf();
+    Close();
+    atm->execute(mStatus, tra, 0, sql.c_str(), mDatabase->Dialect(),
+        nullptr, nullptr, nullptr, nullptr);
+    if (mStatus->isDirty())
+    {
+        std::string context = "Statement::ExecuteImmediate( ";
+        context.append(sql).append(" )");
+        throw SQLExceptionImpl(mStatus, context.c_str(),
+            _("isc_dsql_execute_immediate failed"));
+    }
 }
 
 int StatementImplFb3::AffectedRows()
 {
-	if (mHandle == 0)
-		throw LogicExceptionImpl("Statement::AffectedRows", _("No statement has been prepared."));
-	if (mDatabase == 0)
-		throw LogicExceptionImpl("Statement::AffectedRows", _("A Database must be attached."));
-	if (mDatabase->GetHandle() == 0)
-		throw LogicExceptionImpl("Statement::AffectedRows", _("Database must be connected."));
+    if (mStm == nullptr)
+        throw LogicExceptionImpl("Statement::AffectedRows", _("No statement has been prepared."));
 
-	int count(0);
-	IBS status;
-	RB result;
-	char itemsReq[] = {isc_info_sql_records};
-
-	(*getGDS().Call()->m_dsql_sql_info)(status.Self(), &mHandle, 1, itemsReq,
-		result.Size(), result.Self());
-	if (status.Errors()) throw SQLExceptionImpl(status,
-			"Statement::AffectedRows", _("isc_dsql_sql_info failed."));
-
-	// Cover the INSERT or UPDATE case
-	if (mType == IBPP::stInsert || mType == IBPP::stUpdate)
-	{
-		count += result.GetValue(isc_info_sql_records, isc_info_req_insert_count);
-		count += result.GetValue(isc_info_sql_records, isc_info_req_update_count);
-	}
-	else if (mType == IBPP::stDelete)
-			count = result.GetValue(isc_info_sql_records, isc_info_req_delete_count);
-	else if (mType == IBPP::stSelect)
-			count = result.GetValue(isc_info_sql_records, isc_info_req_select_count);
-	else	count = 0;	// Returns zero count for unknown cases
-
-	return count;
+    ISC_UINT64 count = mStm->getAffectedRecords(mStatus);
+    if (mStatus->isDirty())
+        throw SQLExceptionImpl(mStatus, "Statement::AffectedRows",
+                               _("IStatement::getAffectedRecords failed."));
+    return (int)count;
 }
 
 bool StatementImplFb3::Fetch()
 {
-	if (! mResultSetAvailable)
-		throw LogicExceptionImpl("Statement::Fetch",
-			_("No statement has been executed or no result set available."));
+    if (mOutRow == nullptr)
+        throw LogicExceptionImpl("Statement::Fetch",
+                                 _("No statement has been executed or no result set available."));
 
-	IBS status;
-	ISC_STATUS code = (*getGDS().Call()->m_dsql_fetch)(status.Self(), &mHandle, 1, mOutRow->Self());
-	if (code == 100)	// This special code means "no more rows"
-	{
-		mResultSetAvailable = false;
-		// Oddly enough, fetching rows up to the last one seems to open
-		// an 'implicit' cursor that needs to be closed.
-		mCursorOpened = true;
-		CursorFree();	// Free the explicit or implicit cursor/result-set
-		return false;
-	}
-	if (status.Errors())
-	{
-		Close();
-		throw SQLExceptionImpl(status, "Statement::Fetch",
-			_("isc_dsql_fetch failed."));
-	}
+    ISC_STATUS fetchStatus = mRes->fetchNext(mStatus, mOutRow->GetBuffer());
+    if (mStatus->isDirty())
+    {
+        Close();
+        throw SQLExceptionImpl(mStatus, "Statement::Fetch",
+                               _("isc_dsql_fetch failed."));
+    }
+    if (fetchStatus == Firebird::IStatus::RESULT_NO_DATA)
+    {
+        CursorFree();   
+        return false;
+    }
 
-    // Close the 'implicit' cursor to allow for forther Execute() calls
-    // on the prepared statement without fetching up to the last row
-	mCursorOpened = true;
-	return true;
+    return true;
 }
 
 bool StatementImplFb3::Fetch(IBPP::Row& row)
 {
-	if (! mResultSetAvailable)
-		throw LogicExceptionImpl("Statement::Fetch(row)",
-			_("No statement has been executed or no result set available."));
+    if (mOutRow == nullptr)
+        throw LogicExceptionImpl("Statement::Fetch(row)",
+            _("No statement has been executed or no result set available."));
 
-	RowImplFb3* rowimpl = new RowImplFb3(*mOutRow);
-	row = rowimpl;
+    RowImplFb3* rowimpl = new RowImplFb3(*mOutRow);
+    row = rowimpl;
 
-	IBS status;
-	ISC_STATUS code = (*getGDS().Call()->m_dsql_fetch)(status.Self(), &mHandle, 1,
-					rowimpl->Self());
-	if (code == 100)	// This special code means "no more rows"
-	{
-		mResultSetAvailable = false;
-		// Oddly enough, fetching rows up to the last one seems to open
-		// an 'implicit' cursor that needs to be closed.
-		mCursorOpened = true;
-		CursorFree();	// Free the explicit or implicit cursor/result-set
-		row.clear();
-		return false;
-	}
-	if (status.Errors())
-	{
-		Close();
-		row.clear();
-		throw SQLExceptionImpl(status, "Statement::Fetch(row)",
-			_("isc_dsql_fetch failed."));
-	}
+    ISC_STATUS fetchStatus = mRes->fetchNext(mStatus, rowimpl->GetBuffer());
+    if (fetchStatus == Firebird::IStatus::RESULT_NO_DATA)
+    {
+        CursorFree();
+        row.clear();
+        return false;
+    }
+    if (mStatus->isDirty())
+    {
+        //Close();
+        throw SQLExceptionImpl(mStatus, "Statement::Fetch",
+                               _("isc_dsql_fetch failed."));
+    }
+    if (mStatus->isDirty())
+    {
+        //Close();
+        row.clear();
+        throw SQLExceptionImpl(mStatus, "Statement::Fetch(row)",
+            _("isc_dsql_fetch failed."));
+    }
 
-	return true;
+    return true;
 }
 
 void StatementImplFb3::Close()
 {
-	// Free all statement resources.
-	// Used before preparing a new statement or from destructor.
+    // Free all statement resources.
+    // Used before preparing a new statement or from destructor.
+    CursorFree();
 
-	if (mInRow != 0) { mInRow->Release(); mInRow = 0; }
-	if (mOutRow != 0) { mOutRow->Release(); mOutRow = 0; }
+    if (mInRow != 0)
+    {
+        mInRow->Release();
+        mInRow = 0;
+    }
+    if (mOutRow != 0)
+    {
+        mOutRow->Release();
+        mOutRow = 0;
+    }
 
-	mResultSetAvailable = false;
-	mCursorOpened = false;
-	mType = IBPP::stUnknown;
+    mType = IBPP::stUnknown;
 
-	if (mHandle != 0)
-	{
-		IBS status;
-		(*getGDS().Call()->m_dsql_free_statement)(status.Self(), &mHandle, DSQL_drop);
-		mHandle = 0;
-		if (status.Errors())
-			throw SQLExceptionImpl(status, "Statement::Close(DSQL_drop)",
-				_("isc_dsql_free_statement failed."));
-	}
+    if (mStm != nullptr)
+    {
+        mStm->free(mStatus);
+        mStm = nullptr;
+        if (mStatus->isDirty())
+            throw SQLExceptionImpl(mStatus,
+                "Statement::Close(DSQL_drop)",
+                _("isc_dsql_free_statement failed."));
+    }
 }
 
 void StatementImplFb3::SetNull(int param)
 {
-	if (mHandle == 0)
-		throw LogicExceptionImpl("Statement::SetNull", _("No statement has been prepared."));
-	if (mInRow == 0)
-		throw LogicExceptionImpl("Statement::SetNull", _("The statement does not take parameters."));
+    CheckIsInit("Statement::SetNull");
+    if (mInRow == 0)
+        throw LogicExceptionImpl("Statement::SetNull", _("The statement does not take parameters."));
 
-	mInRow->SetNull(param);
+    mInRow->SetNull(param);
 }
 
 void StatementImplFb3::Set(int param, bool value)
 {
-	if (mHandle == 0)
-		throw LogicExceptionImpl("Statement::Set[bool]", _("No statement has been prepared."));
-	if (mInRow == 0)
-		throw LogicExceptionImpl("Statement::Set[bool]", _("The statement does not take parameters."));
+    CheckIsInit("Statement::Set[bool]");
+    if (mInRow == 0)
+        throw LogicExceptionImpl("Statement::Set[bool]", _("The statement does not take parameters."));
 
-	mInRow->Set(param, value);
+    mInRow->Set(param, value);
 }
 
 void StatementImplFb3::Set(int param, const char* cstring)
 {
-	if (mHandle == 0)
-		throw LogicExceptionImpl("Statement::Set[char*]", _("No statement has been prepared."));
-	if (mInRow == 0)
-		throw LogicExceptionImpl("Statement::Set[char*]", _("The statement does not take parameters."));
+    CheckIsInit("Statement::Set[char*]");
+    if (mInRow == 0)
+        throw LogicExceptionImpl("Statement::Set[char*]", _("The statement does not take parameters."));
 
-	mInRow->Set(param, cstring);
+    mInRow->Set(param, cstring);
 }
 
 void StatementImplFb3::Set(int param, const void* bindata, int len)
 {
-	if (mHandle == 0)
-		throw LogicExceptionImpl("Statement::Set[void*]", _("No statement has been prepared."));
-	if (mInRow == 0)
-		throw LogicExceptionImpl("Statement::Set[void*]", _("The statement does not take parameters."));
+    CheckIsInit("Statement::Set[void*]");
+    if (mInRow == 0)
+        throw LogicExceptionImpl("Statement::Set[void*]", _("The statement does not take parameters."));
 
-	mInRow->Set(param, bindata, len);
+    mInRow->Set(param, bindata, len);
 }
 
 void StatementImplFb3::Set(int param, const std::string& s)
 {
-	if (mHandle == 0)
-		throw LogicExceptionImpl("Statement::Set[string]", _("No statement has been prepared."));
-	if (mInRow == 0)
-		throw LogicExceptionImpl("Statement::Set[string]", _("The statement does not take parameters."));
+    CheckIsInit("Statement::Set[string]");
+    if (mInRow == 0)
+        throw LogicExceptionImpl("Statement::Set[string]", _("The statement does not take parameters."));
 
-	mInRow->Set(param, s);
+    mInRow->Set(param, s);
 }
 
 void StatementImplFb3::Set(int param, int16_t value)
 {
-	if (mHandle == 0)
-		throw LogicExceptionImpl("Statement::Set[int16_t]", _("No statement has been prepared."));
-	if (mInRow == 0)
-		throw LogicExceptionImpl("Statement::Set[int16_t]", _("The statement does not take parameters."));
+    CheckIsInit("Statement::Set[int16_t]");
+    if (mInRow == 0)
+        throw LogicExceptionImpl("Statement::Set[int16_t]", _("The statement does not take parameters."));
 
-	mInRow->Set(param, value);
+    mInRow->Set(param, value);
 }
 
 void StatementImplFb3::Set(int param, int32_t value)
 {
-	if (mHandle == 0)
-		throw LogicExceptionImpl("Statement::Set[int32_t]", _("No statement has been prepared."));
-	if (mInRow == 0)
-		throw LogicExceptionImpl("Statement::Set[int32_t]", _("The statement does not take parameters."));
+    CheckIsInit("Statement::Set[int32_t]");
+    if (mInRow == 0)
+        throw LogicExceptionImpl("Statement::Set[int32_t]", _("The statement does not take parameters."));
 
-	mInRow->Set(param, value);
+    mInRow->Set(param, value);
 }
 
 void StatementImplFb3::Set(int param, int64_t value)
 {
-	if (mHandle == 0)
-		throw LogicExceptionImpl("Statement::Set[int64_t]", _("No statement has been prepared."));
-	if (mInRow == 0)
-		throw LogicExceptionImpl("Statement::Set[int64_t]", _("The statement does not take parameters."));
+    CheckIsInit("Statement::Set[int64_t]");
+    if (mInRow == 0)
+        throw LogicExceptionImpl("Statement::Set[int64_t]", _("The statement does not take parameters."));
 
-	mInRow->Set(param, value);
+    mInRow->Set(param, value);
 }
 
 void StatementImplFb3::Set(int param, float value)
 {
-	if (mHandle == 0)
-		throw LogicExceptionImpl("Statement::Set[float]", _("No statement has been prepared."));
-	if (mInRow == 0)
-		throw LogicExceptionImpl("Statement::Set[float]", _("The statement does not take parameters."));
+    CheckIsInit("Statement::Set[float]");
+    if (mInRow == 0)
+        throw LogicExceptionImpl("Statement::Set[float]", _("The statement does not take parameters."));
 
-	mInRow->Set(param, value);
+    mInRow->Set(param, value);
 }
 
 void StatementImplFb3::Set(int param, double value)
 {
-	if (mHandle == 0)
-		throw LogicExceptionImpl("Statement::Set[double]", _("No statement has been prepared."));
-	if (mInRow == 0)
-		throw LogicExceptionImpl("Statement::Set[double]", _("The statement does not take parameters."));
+    CheckIsInit("Statement::Set[double]");
+    if (mInRow == 0)
+        throw LogicExceptionImpl("Statement::Set[double]", _("The statement does not take parameters."));
 
-	mInRow->Set(param, value);
+    mInRow->Set(param, value);
 }
 
 void StatementImplFb3::Set(int param, const IBPP::Timestamp& value)
 {
-	if (mHandle == 0)
-		throw LogicExceptionImpl("Statement::Set[Timestamp]", _("No statement has been prepared."));
-	if (mInRow == 0)
-		throw LogicExceptionImpl("Statement::Set[Timestamp]", _("The statement does not take parameters."));
+    CheckIsInit("Statement::Set[Timestamp]");
+    if (mInRow == 0)
+        throw LogicExceptionImpl("Statement::Set[Timestamp]", _("The statement does not take parameters."));
 
-	mInRow->Set(param, value);
+    mInRow->Set(param, value);
 }
 
 void StatementImplFb3::Set(int param, const IBPP::Date& value)
 {
-	if (mHandle == 0)
-		throw LogicExceptionImpl("Statement::Set[Date]", _("No statement has been prepared."));
-	if (mInRow == 0)
-		throw LogicExceptionImpl("Statement::Set[Date]", _("The statement does not take parameters."));
+    CheckIsInit("Statement::Set[Date]");
+    if (mInRow == 0)
+        throw LogicExceptionImpl("Statement::Set[Date]", _("The statement does not take parameters."));
 
-	mInRow->Set(param, value);
+    mInRow->Set(param, value);
 }
 
 void StatementImplFb3::Set(int param, const IBPP::Time& value)
 {
-	if (mHandle == 0)
-		throw LogicExceptionImpl("Statement::Set[Time]", _("No statement has been prepared."));
-	if (mInRow == 0)
-		throw LogicExceptionImpl("Statement::Set[Time]", _("The statement does not take parameters."));
+    CheckIsInit("Statement::Set[Time]");
+    if (mInRow == 0)
+        throw LogicExceptionImpl("Statement::Set[Time]", _("The statement does not take parameters."));
 
-	mInRow->Set(param, value);
+    mInRow->Set(param, value);
 }
 
 void StatementImplFb3::Set(int param, const IBPP::Blob& blob)
 {
-	if (mHandle == 0)
-		throw LogicExceptionImpl("Statement::Set[Blob]", _("No statement has been prepared."));
-	if (mInRow == 0)
-		throw LogicExceptionImpl("Statement::Set[Blob]", _("The statement does not take parameters."));
+    CheckIsInit("Statement::Set[Blob]");
+    if (mInRow == 0)
+        throw LogicExceptionImpl("Statement::Set[Blob]", _("The statement does not take parameters."));
 
-	mInRow->Set(param, blob);
+    mInRow->Set(param, blob);
 }
 
 void StatementImplFb3::Set(int param, const IBPP::Array& array)
 {
-	if (mHandle == 0)
-		throw LogicExceptionImpl("Statement::Set[Array]", _("No statement has been prepared."));
-	if (mInRow == 0)
-		throw LogicExceptionImpl("Statement::Set[Array]", _("The statement does not take parameters."));
+    CheckIsInit("Statement::Set[Array]");
+    if (mInRow == 0)
+        throw LogicExceptionImpl("Statement::Set[Array]", _("The statement does not take parameters."));
 
-	mInRow->Set(param, array);
+    mInRow->Set(param, array);
 }
 
 void StatementImplFb3::Set(int param, const IBPP::DBKey& key)
 {
-	if (mHandle == 0)
-		throw LogicExceptionImpl("Statement::Set[DBKey]", _("No statement has been prepared."));
-	if (mInRow == 0)
-		throw LogicExceptionImpl("Statement::Set[DBKey]", _("The statement does not take parameters."));
+    CheckIsInit("Statement::Set[DBKey]");
+    if (mInRow == 0)
+        throw LogicExceptionImpl("Statement::Set[DBKey]", _("The statement does not take parameters."));
 
-	mInRow->Set(param, key);
+    mInRow->Set(param, key);
 }
 
-/*
-void StatementImplFb3::Set(int param, const IBPP::Value& value)
+int StatementImplFb3::ParameterNum(const std::string& name)
 {
-	if (mHandle == 0)
-		throw LogicExceptionImpl("Statement::Set[Value]", _("No statement has been prepared."));
-	if (mInRow == 0)
-		throw LogicExceptionImpl("Statement::Set[Value]", _("The statement does not take parameters."));
-
-	mInRow->Set(param, value);
-}
-*/
-
-int StatementImplFb3::ParameterNum(const std::string& name) { //Dubious use, because we can have 2 :parameters with the same name!
-                                                        //Maybe, remove this method?
     if (name.empty())
         throw LogicExceptionImpl("Statement::ColumnNum", _("Parameter name <empty> not found."));
     std::vector<int> params = this->FindParamsByName(name);
@@ -680,32 +559,34 @@ int StatementImplFb3::ParameterNum(const std::string& name) { //Dubious use, bec
     throw LogicExceptionImpl("Statement::ColumnNum", _("Could not find matching parameter."));
 }
 
-std::vector<int> StatementImplFb3::FindParamsByName(std::string name) {
+std::vector<int> StatementImplFb3::FindParamsByName(std::string name)
+{
     if (name.empty())
-		throw LogicExceptionImpl("Statement::FindParamsByName", _("Parameter name <empty> not found."));
+        throw LogicExceptionImpl("Statement::FindParamsByName", _("Parameter name <empty> not found."));
 
     std::vector<int> params;
     unsigned int i;
-    for(i=0;i < parametersDetailedByName_.size() ; i++) {
+    for(i=0;i < parametersDetailedByName_.size() ; i++)
+    {
         if (parametersDetailedByName_.at(i) == name)
             params.push_back(i+1);
     }
     return params;
 }
 
-std::vector<std::string> StatementImplFb3::ParametersByName() {
-  std::vector<std::string> vt;
-  vt.reserve(parametersByName_.size());
-  for(unsigned int i=0;i < parametersByName_.size() ; i++) {
-      vt.push_back(parametersByName_.at(i));
-  }
-  return vt;
+std::vector<std::string> StatementImplFb3::ParametersByName()
+{
+    std::vector<std::string> vt;
+    vt.reserve(parametersByName_.size());
+    for (unsigned int i=0;i < parametersByName_.size() ; i++)
+    {
+        vt.push_back(parametersByName_.at(i));
+    }
+    return vt;
 }
 
 std::string StatementImplFb3::ParametersParser(std::string sql)
 {
-
-
     unsigned int i;
     bool isDMLcheck = false;
 
@@ -862,16 +743,20 @@ std::string StatementImplFb3::ParametersParser(std::string sql)
   return sProcessedSQL.str();
 }
 
-void StatementImplFb3::SetNull(std::string param) {
+void StatementImplFb3::SetNull(std::string param)
+{
     std::vector<int> params = FindParamsByName(param);
-    if (params.size()==0){
+    if (params.size()==0)
+    {
         throw LogicExceptionImpl("Statement::Set[Value]", _("Parameter does not exists."));
     }
-    for (std::vector<int>::iterator it = params.begin() ; it != params.end(); ++it) {
+    for (std::vector<int>::iterator it = params.begin() ; it != params.end(); ++it)
+    {
         SetNull(*it);
     }
 }
-void StatementImplFb3::Set(std::string param, int64_t value){
+void StatementImplFb3::Set(std::string param, int64_t value)
+{
     std::vector<int> params = FindParamsByName(param);
     if (params.size()==0){
         throw LogicExceptionImpl("Statement::Set[Value]", _("Parameter does not exists."));
@@ -881,7 +766,8 @@ void StatementImplFb3::Set(std::string param, int64_t value){
     }
 }
 
-void StatementImplFb3::Set(std::string param, int32_t value){
+void StatementImplFb3::Set(std::string param, int32_t value)
+{
     std::vector<int> params = FindParamsByName(param);
     if (params.size()==0){
         throw LogicExceptionImpl("Statement::Set[Value]", _("Parameter does not exists."));
@@ -891,7 +777,8 @@ void StatementImplFb3::Set(std::string param, int32_t value){
     }
 }
 
-void StatementImplFb3::Set(std::string param, int16_t value){
+void StatementImplFb3::Set(std::string param, int16_t value)
+{
     std::vector<int> params = FindParamsByName(param);
     if (params.size()==0){
         throw LogicExceptionImpl("Statement::Set[Value]", _("Parameter does not exists."));
@@ -901,7 +788,8 @@ void StatementImplFb3::Set(std::string param, int16_t value){
     }
 }
 
-void StatementImplFb3::Set(std::string param, float value){
+void StatementImplFb3::Set(std::string param, float value)
+{
     std::vector<int> params = FindParamsByName(param);
     if (params.size()==0){
         throw LogicExceptionImpl("Statement::Set[Value]", _("Parameter does not exists."));
@@ -911,7 +799,8 @@ void StatementImplFb3::Set(std::string param, float value){
     }
 }
 
-void StatementImplFb3::Set(std::string param, double value){
+void StatementImplFb3::Set(std::string param, double value)
+{
     std::vector<int> params = FindParamsByName(param);
     if (params.size()==0){
         throw LogicExceptionImpl("Statement::Set[Value]", _("Parameter does not exists."));
@@ -921,7 +810,8 @@ void StatementImplFb3::Set(std::string param, double value){
     }
 }
 
-void StatementImplFb3::Set(std::string param, const void* bindata, int len) {
+void StatementImplFb3::Set(std::string param, const void* bindata, int len)
+{
     std::vector<int> params = FindParamsByName(param);
     if (params.size()==0){
         throw LogicExceptionImpl("Statement::Set[Value]", _("Parameter does not exists."));
@@ -930,7 +820,8 @@ void StatementImplFb3::Set(std::string param, const void* bindata, int len) {
         Set(*it, bindata, len);
     }
 }
-void StatementImplFb3::Set(std::string param, const std::string& s){
+void StatementImplFb3::Set(std::string param, const std::string& s)
+{
     std::vector<int> params = FindParamsByName(param);
     if (params.size()==0){
         throw LogicExceptionImpl("Statement::Set[Value]", _("Parameter does not exists."));
@@ -939,7 +830,8 @@ void StatementImplFb3::Set(std::string param, const std::string& s){
         Set(*it, s);
     }
 }
-void StatementImplFb3::Set(std::string param, const char* cstring){
+void StatementImplFb3::Set(std::string param, const char* cstring)
+{
     std::vector<int> params = FindParamsByName(param);
     if (params.size()==0){
         throw LogicExceptionImpl("Statement::Set[Value]", _("Parameter does not exists."));
@@ -948,7 +840,8 @@ void StatementImplFb3::Set(std::string param, const char* cstring){
         Set(*it, cstring);
     }
 }
-void StatementImplFb3::Set(std::string param, const IBPP::Timestamp& value) {
+void StatementImplFb3::Set(std::string param, const IBPP::Timestamp& value)
+{
     std::vector<int> params = FindParamsByName(param);
     if (params.size()==0){
         throw LogicExceptionImpl("Statement::Set[Value]", _("Parameter does not exists."));
@@ -957,7 +850,8 @@ void StatementImplFb3::Set(std::string param, const IBPP::Timestamp& value) {
         Set(*it, value);
     }
 }
-void StatementImplFb3::Set(std::string param, const IBPP::Time& value) {
+void StatementImplFb3::Set(std::string param, const IBPP::Time& value)
+{
     std::vector<int> params = FindParamsByName(param);
     if (params.size()==0){
         throw LogicExceptionImpl("Statement::Set[Value]", _("Parameter does not exists."));
@@ -1012,653 +906,621 @@ void StatementImplFb3::Set(std::string param, bool value) {
     }
 }
 
-
-
 bool StatementImplFb3::IsNull(int column)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::IsNull", _("The row is not initialized."));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::IsNull", _("The row is not initialized."));
 
-	return mOutRow->IsNull(column);
+    return mOutRow->IsNull(column);
 }
 
 bool StatementImplFb3::Get(int column, bool* retvalue)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
-	if (retvalue == 0)
-		throw LogicExceptionImpl("Statement::Get", _("Null pointer detected"));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
+    if (retvalue == 0)
+        throw LogicExceptionImpl("Statement::Get", _("Null pointer detected"));
 
-	return mOutRow->Get(column, *retvalue);
+    return mOutRow->Get(column, *retvalue);
 }
 
 bool StatementImplFb3::Get(int column, bool& retvalue)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
 
-	return mOutRow->Get(column, retvalue);
+    return mOutRow->Get(column, retvalue);
 }
 
 bool StatementImplFb3::Get(int column, char* retvalue)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
 
-	return mOutRow->Get(column, retvalue);
+    return mOutRow->Get(column, retvalue);
 }
 
 bool StatementImplFb3::Get(int column, void* bindata, int& userlen)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
 
-	return mOutRow->Get(column, bindata, userlen);
+    return mOutRow->Get(column, bindata, userlen);
 }
 
 bool StatementImplFb3::Get(int column, std::string& retvalue)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
 
-	return mOutRow->Get(column, retvalue);
+    return mOutRow->Get(column, retvalue);
 }
 
 bool StatementImplFb3::Get(int column, int16_t* retvalue)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
-	if (retvalue == 0)
-		throw LogicExceptionImpl("Statement::Get", _("Null pointer detected"));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
+    if (retvalue == 0)
+        throw LogicExceptionImpl("Statement::Get", _("Null pointer detected"));
 
-	return mOutRow->Get(column, *retvalue);
+    return mOutRow->Get(column, *retvalue);
 }
 
 bool StatementImplFb3::Get(int column, int16_t& retvalue)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
 
-	return mOutRow->Get(column, retvalue);
+    return mOutRow->Get(column, retvalue);
 }
 
 bool StatementImplFb3::Get(int column, int32_t* retvalue)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
-	if (retvalue == 0)
-		throw LogicExceptionImpl("Statement::Get", _("Null pointer detected"));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
+    if (retvalue == 0)
+        throw LogicExceptionImpl("Statement::Get", _("Null pointer detected"));
 
-	return mOutRow->Get(column, *retvalue);
+    return mOutRow->Get(column, *retvalue);
 }
 
 bool StatementImplFb3::Get(int column, int32_t& retvalue)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
 
-	return mOutRow->Get(column, retvalue);
+    return mOutRow->Get(column, retvalue);
 }
 
 bool StatementImplFb3::Get(int column, int64_t* retvalue)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
-	if (retvalue == 0)
-		throw LogicExceptionImpl("Statement::Get", _("Null pointer detected"));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
+    if (retvalue == 0)
+        throw LogicExceptionImpl("Statement::Get", _("Null pointer detected"));
 
-	return mOutRow->Get(column, *retvalue);
+    return mOutRow->Get(column, *retvalue);
 }
 
 bool StatementImplFb3::Get(int column, int64_t& retvalue)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
 
-	return mOutRow->Get(column, retvalue);
+    return mOutRow->Get(column, retvalue);
 }
 
 bool StatementImplFb3::Get(int column, IBPP::ibpp_int128_t& retvalue)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
 
-	return mOutRow->Get(column, retvalue);
+    return mOutRow->Get(column, retvalue);
 }
 
 bool StatementImplFb3::Get(int column, float* retvalue)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
-	if (retvalue == 0)
-		throw LogicExceptionImpl("Statement::Get", _("Null pointer detected"));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
+    if (retvalue == 0)
+        throw LogicExceptionImpl("Statement::Get", _("Null pointer detected"));
 
-	return mOutRow->Get(column, *retvalue);
+    return mOutRow->Get(column, *retvalue);
 }
 
 bool StatementImplFb3::Get(int column, float& retvalue)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
 
-	return mOutRow->Get(column, retvalue);
+    return mOutRow->Get(column, retvalue);
 }
 
 bool StatementImplFb3::Get(int column, double* retvalue)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
-	if (retvalue == 0)
-		throw LogicExceptionImpl("Statement::Get", _("Null pointer detected"));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
+    if (retvalue == 0)
+        throw LogicExceptionImpl("Statement::Get", _("Null pointer detected"));
 
-	return mOutRow->Get(column, *retvalue);
+    return mOutRow->Get(column, *retvalue);
 }
 
 bool StatementImplFb3::Get(int column, double& retvalue)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
 
-	return mOutRow->Get(column, retvalue);
+    return mOutRow->Get(column, retvalue);
 }
 
 bool StatementImplFb3::Get(int column, IBPP::ibpp_dec16_t& retvalue)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
 
-	return mOutRow->Get(column, retvalue);
+    return mOutRow->Get(column, retvalue);
 }
 
 bool StatementImplFb3::Get(int column, IBPP::ibpp_dec34_t& retvalue)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
 
-	return mOutRow->Get(column, retvalue);
+    return mOutRow->Get(column, retvalue);
 }
-
 
 bool StatementImplFb3::Get(int column, IBPP::Timestamp& timestamp)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
 
-	return mOutRow->Get(column, timestamp);
+    return mOutRow->Get(column, timestamp);
 }
 
 bool StatementImplFb3::Get(int column, IBPP::Date& date)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
 
-	return mOutRow->Get(column, date);
+    return mOutRow->Get(column, date);
 }
 
 bool StatementImplFb3::Get(int column, IBPP::Time& time)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
 
-	return mOutRow->Get(column, time);
+    return mOutRow->Get(column, time);
 }
 
 bool StatementImplFb3::Get(int column, IBPP::Blob& blob)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
 
-	return mOutRow->Get(column, blob);
+    return mOutRow->Get(column, blob);
 }
 
 bool StatementImplFb3::Get(int column, IBPP::DBKey& key)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
 
-	return mOutRow->Get(column, key);
+    return mOutRow->Get(column, key);
 }
 
 bool StatementImplFb3::Get(int column, IBPP::Array& array)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
 
-	return mOutRow->Get(column, array);
+    return mOutRow->Get(column, array);
 }
-
-/*
-const IBPP::Value StatementImplFb3::Get(int column)
-{
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
-
-	return mOutRow->Get(column);
-}
-*/
 
 bool StatementImplFb3::IsNull(const std::string& name)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::IsNull", _("The row is not initialized."));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::IsNull", _("The row is not initialized."));
 
-	return mOutRow->IsNull(name);
+    return mOutRow->IsNull(name);
 }
 
 bool StatementImplFb3::Get(const std::string& name, bool* retvalue)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
-	if (retvalue == 0)
-		throw LogicExceptionImpl("Statement::Get", _("Null pointer detected"));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
+    if (retvalue == 0)
+        throw LogicExceptionImpl("Statement::Get", _("Null pointer detected"));
 
-	return mOutRow->Get(name, *retvalue);
+    return mOutRow->Get(name, *retvalue);
 }
 
 bool StatementImplFb3::Get(const std::string& name, bool& retvalue)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
 
-	return mOutRow->Get(name, retvalue);
+    return mOutRow->Get(name, retvalue);
 }
 
 bool StatementImplFb3::Get(const std::string& name, char* retvalue)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get[char*]", _("The row is not initialized."));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Get[char*]", _("The row is not initialized."));
 
-	return mOutRow->Get(name, retvalue);
+    return mOutRow->Get(name, retvalue);
 }
 
 bool StatementImplFb3::Get(const std::string& name, void* retvalue, int& count)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get[void*,int]", _("The row is not initialized."));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Get[void*,int]", _("The row is not initialized."));
 
-	return mOutRow->Get(name, retvalue, count);
+    return mOutRow->Get(name, retvalue, count);
 }
 
 bool StatementImplFb3::Get(const std::string& name, std::string& retvalue)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::GetString", _("The row is not initialized."));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::GetString", _("The row is not initialized."));
 
-	return mOutRow->Get(name, retvalue);
+    return mOutRow->Get(name, retvalue);
 }
 
 bool StatementImplFb3::Get(const std::string& name, int16_t* retvalue)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
-	if (retvalue == 0)
-		throw LogicExceptionImpl("Statement::Get", _("Null pointer detected"));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
+    if (retvalue == 0)
+        throw LogicExceptionImpl("Statement::Get", _("Null pointer detected"));
 
-	return mOutRow->Get(name, *retvalue);
+    return mOutRow->Get(name, *retvalue);
 }
 
 bool StatementImplFb3::Get(const std::string& name, int16_t& retvalue)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
 
-	return mOutRow->Get(name, retvalue);
+    return mOutRow->Get(name, retvalue);
 }
 
 bool StatementImplFb3::Get(const std::string& name, int32_t* retvalue)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
-	if (retvalue == 0)
-		throw LogicExceptionImpl("Statement::Get", _("Null pointer detected"));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
+    if (retvalue == 0)
+        throw LogicExceptionImpl("Statement::Get", _("Null pointer detected"));
 
-	return mOutRow->Get(name, *retvalue);
+    return mOutRow->Get(name, *retvalue);
 }
 
 bool StatementImplFb3::Get(const std::string& name, int32_t& retvalue)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
 
-	return mOutRow->Get(name, retvalue);
+    return mOutRow->Get(name, retvalue);
 }
 
 bool StatementImplFb3::Get(const std::string& name, int64_t* retvalue)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
-	if (retvalue == 0)
-		throw LogicExceptionImpl("Statement::Get", _("Null pointer detected"));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
+    if (retvalue == 0)
+        throw LogicExceptionImpl("Statement::Get", _("Null pointer detected"));
 
-	return mOutRow->Get(name, *retvalue);
+    return mOutRow->Get(name, *retvalue);
 }
 
 bool StatementImplFb3::Get(const std::string& name, int64_t& retvalue)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
 
-	return mOutRow->Get(name, retvalue);
+    return mOutRow->Get(name, retvalue);
 }
 
 bool StatementImplFb3::Get(const std::string& name, float* retvalue)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
-	if (retvalue == 0)
-		throw LogicExceptionImpl("Statement::Get", _("Null pointer detected"));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
+    if (retvalue == 0)
+        throw LogicExceptionImpl("Statement::Get", _("Null pointer detected"));
 
-	return mOutRow->Get(name, *retvalue);
+    return mOutRow->Get(name, *retvalue);
 }
 
 bool StatementImplFb3::Get(const std::string& name, float& retvalue)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
 
-	return mOutRow->Get(name, retvalue);
+    return mOutRow->Get(name, retvalue);
 }
 
 bool StatementImplFb3::Get(const std::string& name, double* retvalue)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
-	if (retvalue == 0)
-		throw LogicExceptionImpl("Statement::Get", _("Null pointer detected"));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
+    if (retvalue == 0)
+        throw LogicExceptionImpl("Statement::Get", _("Null pointer detected"));
 
-	return mOutRow->Get(name, *retvalue);
+    return mOutRow->Get(name, *retvalue);
 }
 
 bool StatementImplFb3::Get(const std::string& name, double& retvalue)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
 
-	return mOutRow->Get(name, retvalue);
+    return mOutRow->Get(name, retvalue);
 }
 
 bool StatementImplFb3::Get(const std::string& name, IBPP::Timestamp& retvalue)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
 
-	return mOutRow->Get(name, retvalue);
+    return mOutRow->Get(name, retvalue);
 }
 
 bool StatementImplFb3::Get(const std::string& name, IBPP::Date& retvalue)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
 
-	return mOutRow->Get(name, retvalue);
+    return mOutRow->Get(name, retvalue);
 }
 
 bool StatementImplFb3::Get(const std::string& name, IBPP::Time& retvalue)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
 
-	return mOutRow->Get(name, retvalue);
+    return mOutRow->Get(name, retvalue);
 }
 
 bool StatementImplFb3::Get(const std::string&name, IBPP::Blob& retblob)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
 
-	return mOutRow->Get(name, retblob);
+    return mOutRow->Get(name, retblob);
 }
 
 bool StatementImplFb3::Get(const std::string& name, IBPP::DBKey& retvalue)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
 
-	return mOutRow->Get(name, retvalue);
+    return mOutRow->Get(name, retvalue);
 }
 
 bool StatementImplFb3::Get(const std::string& name, IBPP::Array& retarray)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
 
-	return mOutRow->Get(name, retarray);
+    return mOutRow->Get(name, retarray);
 }
-
-/*
-const IBPP::Value StatementImplFb3::Get(const std::string& name)
-{
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Get", _("The row is not initialized."));
-
-	return mOutRow->Get(name);
-}
-*/
 
 int StatementImplFb3::Columns()
 {
-	if (mOutRow == 0)
-		return 0;
+    if (mOutRow == 0)
+        return 0;
 
-	return mOutRow->Columns();
+    return mOutRow->Columns();
 }
 
 int StatementImplFb3::ColumnNum(const std::string& name)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::ColumnNum", _("The row is not initialized."));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::ColumnNum", _("The row is not initialized."));
 
-	return mOutRow->ColumnNum(name);
+    return mOutRow->ColumnNum(name);
 }
 
 const char* StatementImplFb3::ColumnName(int varnum)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Columns", _("The row is not initialized."));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Columns", _("The row is not initialized."));
 
-	return mOutRow->ColumnName(varnum);
+    return mOutRow->ColumnName(varnum);
 }
 
 const char* StatementImplFb3::ColumnAlias(int varnum)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Columns", _("The row is not initialized."));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Columns", _("The row is not initialized."));
 
-	return mOutRow->ColumnAlias(varnum);
+    return mOutRow->ColumnAlias(varnum);
 }
 
 const char* StatementImplFb3::ColumnTable(int varnum)
 {
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::Columns", _("The row is not initialized."));
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::Columns", _("The row is not initialized."));
 
-	return mOutRow->ColumnTable(varnum);
+    return mOutRow->ColumnTable(varnum);
 }
 
 int StatementImplFb3::ColumnSQLType(int varnum)
 {
-    if (mHandle == 0)
-        throw LogicExceptionImpl("Statement::ColumnType", _("No statement has been prepared."));
+    CheckIsInit("Statement::ColumnSQLType");
     if (mOutRow == 0)
-        throw LogicExceptionImpl("Statement::ColumnType", _("The statement does not return results."));
+        throw LogicExceptionImpl("Statement::ColumnSQLType", _("The statement does not return results."));
 
     return mOutRow->ColumnSQLType(varnum);
 }
 
 IBPP::SDT StatementImplFb3::ColumnType(int varnum)
 {
-	if (mHandle == 0)
-		throw LogicExceptionImpl("Statement::ColumnType", _("No statement has been prepared."));
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::ColumnType", _("The statement does not return results."));
+    CheckIsInit("Statement::ColumnType");
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::ColumnType", _("The statement does not return results."));
 
     return mOutRow->ColumnType(varnum);
 }
 
 int StatementImplFb3::ColumnSubtype(int varnum)
 {
-	if (mHandle == 0)
-		throw LogicExceptionImpl("Statement::ColumnSubtype", _("No statement has been prepared."));
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::ColumnSubtype", _("The statement does not return results."));
+    CheckIsInit("Statement::ColumnSubtype");
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::ColumnSubtype", _("The statement does not return results."));
 
     return mOutRow->ColumnSubtype(varnum);
 }
 
 int StatementImplFb3::ColumnSize(int varnum)
 {
-	if (mHandle == 0)
-		throw LogicExceptionImpl("Statement::ColumnSize", _("No statement has been prepared."));
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::ColumnSize", _("The row is not initialized."));
+    CheckIsInit("Statement::ColumnSize");
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::ColumnSize", _("The row is not initialized."));
 
-	return mOutRow->ColumnSize(varnum);
+    return mOutRow->ColumnSize(varnum);
 }
 
 int StatementImplFb3::ColumnScale(int varnum)
 {
-	if (mHandle == 0)
-		throw LogicExceptionImpl("Statement::ColumnScale", _("No statement has been prepared."));
-	if (mOutRow == 0)
-		throw LogicExceptionImpl("Statement::ColumnScale", _("The row is not initialized."));
+    CheckIsInit("Statement::ColumnScale");
+    if (mOutRow == 0)
+        throw LogicExceptionImpl("Statement::ColumnScale", _("The row is not initialized."));
 
-	return mOutRow->ColumnScale(varnum);
+    return mOutRow->ColumnScale(varnum);
 }
 
 int StatementImplFb3::Parameters()
 {
-	if (mHandle == 0)
-		throw LogicExceptionImpl("Statement::Parameters", _("No statement has been prepared."));
-	if (mInRow == 0)
-		throw LogicExceptionImpl("Statement::Parameters", _("The statement uses no parameters."));
+    CheckIsInit("Statement::Parameters");
+    if (mInRow == 0)
+        throw LogicExceptionImpl("Statement::Parameters", _("The statement uses no parameters."));
 
-	return mInRow->Columns();
+    return mInRow->Columns();
 }
 
 IBPP::SDT StatementImplFb3::ParameterType(int varnum)
 {
-	if (mHandle == 0)
-		throw LogicExceptionImpl("Statement::ParameterType", _("No statement has been prepared."));
-	if (mInRow == 0)
-		throw LogicExceptionImpl("Statement::ParameterType", _("The statement uses no parameters."));
+    CheckIsInit("Statement::ParameterType");
+    if (mInRow == 0)
+        throw LogicExceptionImpl("Statement::ParameterType", _("The statement uses no parameters."));
 
     return mInRow->ColumnType(varnum);
 }
 
 int StatementImplFb3::ParameterSubtype(int varnum)
 {
-	if (mHandle == 0)
-		throw LogicExceptionImpl("Statement::ParameterSubtype", _("No statement has been prepared."));
-	if (mInRow == 0)
-		throw LogicExceptionImpl("Statement::ParameterSubtype", _("The statement uses no parameters."));
+    CheckIsInit("Statement::ParameterSubtype");
+    if (mInRow == 0)
+        throw LogicExceptionImpl("Statement::ParameterSubtype", _("The statement uses no parameters."));
 
     return mInRow->ColumnSubtype(varnum);
 }
 
 int StatementImplFb3::ParameterSize(int varnum)
 {
-	if (mHandle == 0)
-		throw LogicExceptionImpl("Statement::ParameterSize", _("No statement has been prepared."));
-	if (mInRow == 0)
-		throw LogicExceptionImpl("Statement::ParameterSize", _("The statement uses no parameters."));
+    CheckIsInit("Statement::ParameterSize");
+    if (mInRow == 0)
+        throw LogicExceptionImpl("Statement::ParameterSize", _("The statement uses no parameters."));
 
-	return mInRow->ColumnSize(varnum);
+    return mInRow->ColumnSize(varnum);
 }
 
 int StatementImplFb3::ParameterScale(int varnum)
 {
-	if (mHandle == 0)
-		throw LogicExceptionImpl("Statement::ParameterScale", _("No statement has been prepared."));
-	if (mInRow == 0)
-		throw LogicExceptionImpl("Statement::ParameterScale", _("The statement uses no parameters."));
+    CheckIsInit("Statement::ParameterScale");
+    if (mInRow == 0)
+        throw LogicExceptionImpl("Statement::ParameterScale", _("The statement uses no parameters."));
 
-	return mInRow->ColumnScale(varnum);
+    return mInRow->ColumnScale(varnum);
 }
 
 IBPP::Database StatementImplFb3::DatabasePtr() const
 {
-	return mDatabase;
+    return mDatabase;
 }
 
 IBPP::Transaction StatementImplFb3::TransactionPtr() const
 {
-	return mTransaction;
+    return mTransaction;
 }
 
 //	(((((((( OBJECT INTERNAL METHODS ))))))))
 
 void StatementImplFb3::AttachDatabaseImpl(DatabaseImplFb3* database)
 {
-	if (database == 0)
-		throw LogicExceptionImpl("Statement::AttachDatabase",
-			_("Can't attach a 0 IDatabase object."));
+    if (database == 0)
+        throw LogicExceptionImpl("Statement::AttachDatabase",
+            _("Can't attach a 0 IDatabase object."));
 
-	if (mDatabase != 0) mDatabase->DetachStatementImpl(this);
-	mDatabase = database;
-	mDatabase->AttachStatementImpl(this);
+    if (mDatabase != 0) mDatabase->DetachStatementImpl(this);
+    mDatabase = database;
+    mDatabase->AttachStatementImpl(this);
 }
 
 void StatementImplFb3::DetachDatabaseImpl()
 {
-	if (mDatabase == 0) return;
+    if (mDatabase == 0) return;
 
-	Close();
-	mDatabase->DetachStatementImpl(this);
-	mDatabase = 0;
+    Close();
+    mDatabase->DetachStatementImpl(this);
+    mDatabase = 0;
 }
 
 void StatementImplFb3::AttachTransactionImpl(TransactionImplFb3* transaction)
 {
-	if (transaction == 0)
-		throw LogicExceptionImpl("Statement::AttachTransaction",
-			_("Can't attach a 0 ITransaction object."));
+    if (transaction == 0)
+        throw LogicExceptionImpl("Statement::AttachTransaction",
+            _("Can't attach a 0 ITransaction object."));
 
-	if (mTransaction != 0) mTransaction->DetachStatementImpl(this);
-	mTransaction = transaction;
-	mTransaction->AttachStatementImpl(this);
+    if (mTransaction != 0) mTransaction->DetachStatementImpl(this);
+    mTransaction = transaction;
+    mTransaction->AttachStatementImpl(this);
 }
 
 void StatementImplFb3::DetachTransactionImpl()
 {
-	if (mTransaction == 0) return;
+    if (mTransaction == 0) return;
 
-	Close();
-	mTransaction->DetachStatementImpl(this);
-	mTransaction = 0;
+    Close();
+    mTransaction->DetachStatementImpl(this);
+    mTransaction = 0;
 }
 
 void StatementImplFb3::CursorFree()
 {
-	if (mCursorOpened)
-	{
-		mCursorOpened = false;
-		if (mHandle != 0)
-		{
-			IBS status;
-			(*getGDS().Call()->m_dsql_free_statement)(status.Self(), &mHandle, DSQL_close);
-			if (status.Errors())
-				throw SQLExceptionImpl(status, "StatementImplFb3::CursorFree(DSQL_close)",
-					_("isc_dsql_free_statement failed."));
-		}
-	}
+    if (mRes == nullptr)
+        return;
+
+    mRes->close(mStatus);
+    mRes = nullptr;
+    if (mStatus->isDirty())
+        throw SQLExceptionImpl(mStatus, "StatementImplFb3::CursorFree(DSQL_close)",
+                               _("IResultSet::close failed."));
 }
 
 StatementImplFb3::StatementImplFb3(DatabaseImplFb3* database, TransactionImplFb3* transaction)
-	: mHandle(0), mDatabase(0), mTransaction(0),
-	mInRow(0), mOutRow(0),
-	mResultSetAvailable(false), mCursorOpened(false), mType(IBPP::stUnknown)
+    : mStm(nullptr), mRes(nullptr), mDatabase(0), mTransaction(0),
+    mInRow(0), mOutRow(0),
+    mType(IBPP::stUnknown)
 {
-	AttachDatabaseImpl(database);
-	if (transaction != 0) AttachTransactionImpl(transaction);
+    IMaster* master = FactoriesImplFb3::gMaster;
+    mStatus = new CheckStatusWrapper(master->getStatus());
+
+    AttachDatabaseImpl(database);
+    if (transaction != 0) AttachTransactionImpl(transaction);
 }
 
 StatementImplFb3::~StatementImplFb3()
 {
-	try { Close(); }
-		catch (...) { }
-	try { if (mTransaction != 0) mTransaction->DetachStatementImpl(this); }
-		catch (...) { }
-	try { if (mDatabase != 0) mDatabase->DetachStatementImpl(this); }
-		catch (...) { }
+    try { Close(); }
+        catch (...) { }
+    try { if (mTransaction != 0) mTransaction->DetachStatementImpl(this); }
+        catch (...) { }
+    try { if (mDatabase != 0) mDatabase->DetachStatementImpl(this); }
+        catch (...) { }
+
+    delete mStatus;
 }
 

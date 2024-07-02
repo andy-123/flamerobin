@@ -668,7 +668,7 @@ public:
     SQLExceptionImpl& operator=(const SQLExceptionImpl& copied) throw();
     SQLExceptionImpl(const IBS& status, const std::string& context,
                         const char* message = 0, ...) throw();
-    SQLExceptionImpl(Firebird::IStatus* mStatus, const std::string& context,
+    SQLExceptionImpl(Firebird::IStatus* status, const std::string& context,
                         const char* message = 0, ...) throw();
 
     virtual ~SQLExceptionImpl() throw ();
@@ -709,19 +709,6 @@ public:
     virtual const char* what() const throw();
 };
 
-void encodeDate(ISC_DATE& isc_dt, const IBPP::Date& dt);
-void decodeDate(IBPP::Date& dt, const ISC_DATE& isc_dt);
-
-void encodeTime(ISC_TIME& isc_tm, const IBPP::Time& tm);
-void decodeTime(IBPP::Time& tm, const ISC_TIME& isc_tm);
-
-void decodeTimeTz(IBPP::Time& tm, const ISC_TIME_TZ& isc_tm);
-
-void encodeTimestamp(ISC_TIMESTAMP& isc_ts, const IBPP::Timestamp& ts);
-void decodeTimestamp(IBPP::Timestamp& ts, const ISC_TIMESTAMP& isc_ts);
-
-void decodeTimestampTz(IBPP::Timestamp& ts, const ISC_TIMESTAMP_TZ& isc_ts);
-
 struct consts   // See _ibpp.cpp for initializations of these constants
 {
     static const double dscales[19];
@@ -730,6 +717,8 @@ struct consts   // See _ibpp.cpp for initializations of these constants
     static const int16_t max16;
     static const int32_t min32;
     static const int32_t max32;
+    static const int64_t min64;
+    static const int64_t max64;
 };
 
 /* FB3+: get the IMaster-interface.

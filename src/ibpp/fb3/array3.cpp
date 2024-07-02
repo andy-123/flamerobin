@@ -495,37 +495,46 @@ void ArrayImplFb3::ReadTo(IBPP::ADT adtype, void* data, int datacount)
 			break;
 
 		case blr_timestamp :
+        {
 			if (adtype != IBPP::adTimestamp) throw LogicExceptionImpl("Array::ReadTo",
 												_("Incompatible types."));
+            UtlFb3* utl = FactoriesImplFb3::gUtlFb3;
 			for (int i = 0; i < mElemCount; i++)
 			{
-				decodeTimestamp(*(IBPP::Timestamp*)dst, *(ISC_TIMESTAMP*)src);
+				utl->decodeTimestamp(*(IBPP::Timestamp*)dst, *(ISC_TIMESTAMP*)src);
 				src += mElemSize;
 				dst += sizeof(IBPP::Timestamp);
 			}
 			break;
+        }
 
 		case blr_sql_date :
+        {
 			if (adtype != IBPP::adDate) throw LogicExceptionImpl("Array::ReadTo",
 												_("Incompatible types."));
+            UtlFb3* utl = FactoriesImplFb3::gUtlFb3;
 			for (int i = 0; i < mElemCount; i++)
 			{
-				decodeDate(*(IBPP::Date*)dst, *(ISC_DATE*)src);
+				utl->decodeDate(*(IBPP::Date*)dst, *(ISC_DATE*)src);
 				src += mElemSize;
 				dst += sizeof(IBPP::Date);
 			}
 			break;
+        }
 
 		case blr_sql_time :
+        {
 			if (adtype != IBPP::adTime) throw LogicExceptionImpl("Array::ReadTo",
 												_("Incompatible types."));
+            UtlFb3* utl = FactoriesImplFb3::gUtlFb3;
 			for (int i = 0; i < mElemCount; i++)
 			{
-				decodeTime(*(IBPP::Time*)dst, *(ISC_TIME*)src);
+				utl->decodeTime(*(IBPP::Time*)dst, *(ISC_TIME*)src);
 				src += mElemSize;
 				dst += sizeof(IBPP::Time);
 			}
 			break;
+        }
 
 		default :
 			throw LogicExceptionImpl("Array::ReadTo", _("Unknown sql type."));
@@ -844,37 +853,46 @@ void ArrayImplFb3::WriteFrom(IBPP::ADT adtype, const void* data, int datacount)
 			break;
 
 		case blr_timestamp :
+        {
 			if (adtype != IBPP::adTimestamp) throw LogicExceptionImpl("Array::ReadTo",
 												_("Incompatible types."));
+            UtlFb3* utl = FactoriesImplFb3::gUtlFb3;
 			for (int i = 0; i < mElemCount; i++)
 			{
-				encodeTimestamp(*(ISC_TIMESTAMP*)dst, *(IBPP::Timestamp*)src);
+				utl->encodeTimestamp(*(ISC_TIMESTAMP*)dst, *(IBPP::Timestamp*)src);
 				src += sizeof(IBPP::Timestamp);
 				dst += mElemSize;
 			}
 			break;
+        }
 
 		case blr_sql_date :
+        {
 			if (adtype != IBPP::adDate) throw LogicExceptionImpl("Array::ReadTo",
 												_("Incompatible types."));
+            UtlFb3* utl = FactoriesImplFb3::gUtlFb3;
 			for (int i = 0; i < mElemCount; i++)
 			{
-				encodeDate(*(ISC_DATE*)dst, *(IBPP::Date*)src);
+				utl->encodeDate(*(ISC_DATE*)dst, *(IBPP::Date*)src);
 				src += sizeof(IBPP::Date);
 				dst += mElemSize;
 			}
 			break;
+        }
 
 		case blr_sql_time :
+        {
 			if (adtype != IBPP::adTime) throw LogicExceptionImpl("Array::ReadTo",
 												_("Incompatible types."));
+            UtlFb3* utl = FactoriesImplFb3::gUtlFb3;
 			for (int i = 0; i < mElemCount; i++)
 			{
-				encodeTime(*(ISC_TIME*)dst, *(IBPP::Time*)src);
+				utl->encodeTime(*(ISC_TIME*)dst, *(IBPP::Time*)src);
 				src += sizeof(IBPP::Time);
 				dst += mElemSize;
 			}
 			break;
+        }
 
 		default :
 			throw LogicExceptionImpl("Array::WriteFrom", _("Unknown sql type."));

@@ -21,6 +21,7 @@
 #endif
 
 #include "_ibpp.h"
+#include "fb3/ibppfb3.h"
 
 #ifdef HAS_HDRSTOP
 #pragma hdrstop
@@ -199,22 +200,24 @@ SQLExceptionImpl::SQLExceptionImpl(const IBS& status, const std::string& context
 	mWhat.append(status.ErrorMessage());
 }
 
-SQLExceptionImpl::SQLExceptionImpl(Firebird::IStatus* mStatus, const std::string& context,
+SQLExceptionImpl::SQLExceptionImpl(Firebird::IStatus* status, const std::string& context,
                         const char* message, ...) throw()
 {
-	va_list argptr;
-	va_start(argptr, message);
-	mWhat.assign("*** IBPP::SQLException ***\n");
-	raise(context, message, argptr);
-	va_end(argptr);
-    #ifdef FIXME
-	mSqlCode = status.SqlCode();
-	mEngineCode = status.EngineCode();
-	mWhat.append(status.ErrorMessage());
-    #endif
-    mSqlCode = 111;
-    mEngineCode = 222;
-    mWhat.append("Todo");
+    va_list argptr;
+    va_start(argptr, message);
+    mWhat.assign("*** IBPP::SQLException ***\n");
+    raise(context, message, argptr);
+    va_end(argptr);
+
+    Firebird::IUtil* utl = FactoriesImplFb3::gUtil;
+    char msg[1024] = {0};
+    unsigned msgsize = utl->formatStatus(msg, sizeof(msg), status);
+
+    const intptr_t* errors = status->getErrors();
+    // mSqlCode/mEnginCode may be unused here ...
+    mSqlCode = 0;//? status.SqlCode();/isc_sqlcode()
+    mEngineCode = 0;//?(errors[0] == 1) ? (int)errors[1] : 0;
+    mWhat.append(msg);
 }
 
 SQLExceptionImpl::~SQLExceptionImpl() throw ()

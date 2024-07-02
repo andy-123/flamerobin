@@ -1060,21 +1060,21 @@ void RowImplFb1::SetValue(int varnum, IITYPE ivType, const void* value, int user
 			if (ivType != ivTimestamp)
 				throw WrongTypeImpl("RowImplFb1::SetValue", var->sqltype, ivType,
 										_("Incompatible types."));
-			encodeTimestamp(*(ISC_TIMESTAMP*)var->sqldata, *(IBPP::Timestamp*)value);
+			utlfb1::encodeTimestamp(*(ISC_TIMESTAMP*)var->sqldata, *(IBPP::Timestamp*)value);
 			break;
 
 		case SQL_TYPE_DATE :
 			if (ivType != ivDate)
 				throw WrongTypeImpl("RowImplFb1::SetValue", var->sqltype, ivType,
 										_("Incompatible types."));
-			encodeDate(*(ISC_DATE*)var->sqldata, *(IBPP::Date*)value);
+			utlfb1::encodeDate(*(ISC_DATE*)var->sqldata, *(IBPP::Date*)value);
 			break;
 
 		case SQL_TYPE_TIME :
 			if (ivType != ivTime)
 				throw WrongTypeImpl("RowImplFb1::SetValue", var->sqltype, ivType,
 											_("Incompatible types."));
-			encodeTime(*(ISC_TIME*)var->sqldata, *(IBPP::Time*)value);
+			utlfb1::encodeTime(*(ISC_TIME*)var->sqldata, *(IBPP::Time*)value);
 			break;
 
 		case SQL_BLOB :
@@ -1402,7 +1402,7 @@ void* RowImplFb1::GetValue(int varnum, IITYPE ivType, void* retvalue)
 			if (ivType != ivTimestamp)
 				throw WrongTypeImpl("RowImplFb1::SetValue", var->sqltype, ivType,
 										_("Incompatible types."));
-			decodeTimestamp(*(IBPP::Timestamp*)retvalue, *(ISC_TIMESTAMP*)var->sqldata);
+			utlfb1::decodeTimestamp(*(IBPP::Timestamp*)retvalue, *(ISC_TIMESTAMP*)var->sqldata);
 			value = retvalue;
 			break;
 
@@ -1410,7 +1410,7 @@ void* RowImplFb1::GetValue(int varnum, IITYPE ivType, void* retvalue)
 			if (ivType != ivDate)
 				throw WrongTypeImpl("RowImplFb1::SetValue", var->sqltype, ivType,
 										_("Incompatible types."));
-			decodeDate(*(IBPP::Date*)retvalue, *(ISC_DATE*)var->sqldata);
+			utlfb1::decodeDate(*(IBPP::Date*)retvalue, *(ISC_DATE*)var->sqldata);
 			value = retvalue;
 			break;
 
@@ -1418,7 +1418,7 @@ void* RowImplFb1::GetValue(int varnum, IITYPE ivType, void* retvalue)
 			if (ivType != ivTime)
 				throw WrongTypeImpl("RowImplFb1::SetValue", var->sqltype, ivType,
 										_("Incompatible types."));
-			decodeTime(*(IBPP::Time*)retvalue, *(ISC_TIME*)var->sqldata);
+			utlfb1::decodeTime(*(IBPP::Time*)retvalue, *(ISC_TIME*)var->sqldata);
 			value = retvalue;
 			break;
 
@@ -1450,22 +1450,6 @@ void* RowImplFb1::GetValue(int varnum, IITYPE ivType, void* retvalue)
 				array->SetId((ISC_QUAD*)var->sqldata);
 				value = retvalue;
 			}
-			break;
-
-		case SQL_TIMESTAMP_TZ :
-			if (ivType != ivTimestamp)
-				throw WrongTypeImpl("RowImplFb1::SetValue", var->sqltype, ivType,
-										_("Incompatible types."));
-			decodeTimestampTz(*(IBPP::Timestamp*)retvalue, *(ISC_TIMESTAMP_TZ*)var->sqldata);
-			value = retvalue;
-			break;
-
-		case SQL_TIME_TZ :
-			if (ivType != ivTime)
-				throw WrongTypeImpl("RowImplFb1::SetValue", var->sqltype, ivType,
-										_("Incompatible types."));
-			decodeTimeTz(*(IBPP::Time*)retvalue, *(ISC_TIME_TZ*)var->sqldata);
-			value = retvalue;
 			break;
 
 		default : throw LogicExceptionImpl("RowImplFb1::GetValue",

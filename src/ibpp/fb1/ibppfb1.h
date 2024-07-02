@@ -791,4 +791,16 @@ public:
     static bool gInit(ibpp_HMODULE h);
 };
 
+namespace ibpp_internals::utlfb1
+{
+    void encodeDate(ISC_DATE& isc_dt, const IBPP::Date& dt);
+    void decodeDate(IBPP::Date& dt, const ISC_DATE& isc_dt);
+
+    void encodeTime(ISC_TIME& isc_tm, const IBPP::Time& tm);
+    void decodeTime(IBPP::Time& tm, const ISC_TIME& isc_tm);
+
+    void encodeTimestamp(ISC_TIMESTAMP& isc_ts, const IBPP::Timestamp& ts);
+    void decodeTimestamp(IBPP::Timestamp& ts, const ISC_TIMESTAMP& isc_ts);
+};
+
 #endif

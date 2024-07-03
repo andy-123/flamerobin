@@ -637,9 +637,10 @@ class BlobImplFb3 : public IBPP::IBlob
 private:
     friend class RowImplFb3;
 
+    CheckStatusWrapper* mStatus;
+    Firebird::IBlob*        mBlb;
     bool                    mIdAssigned;
     ISC_QUAD                mId;
-    isc_blob_handle         mHandle;
     bool                    mWriteMode;
     DatabaseImplFb3*        mDatabase;      // Belongs to this database
     TransactionImplFb3*     mTransaction;   // Belongs to this transaction

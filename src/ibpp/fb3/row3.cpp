@@ -1289,9 +1289,10 @@ void* RowImplFb3::GetValue(int varnum, IITYPE ivType, void* retvalue)
             {
                 value = col->dataPtr;
             }
+            #ifdef HAVE_INT128
             else if (ivType == ivInt16)
             {
-                __int128_t tmp = *(__int128_t*)col->dataPtr;
+                __int128 tmp = *(__int128*)col->dataPtr;
                 if (tmp < consts::min16 || tmp > consts::max16)
                     throw LogicExceptionImpl("RowImplFb3::GetValue",
                         _("Out of range numeric conversion !"));
@@ -1338,6 +1339,7 @@ void* RowImplFb3::GetValue(int varnum, IITYPE ivType, void* retvalue)
                 col->data.vNumeric = *(__int128_t*)col->dataPtr / divisor;
                 value = &col->data.vNumeric;
             }
+            #endif          
             else throw WrongTypeImpl("RowImplFb3::GetValue", col->sqltype, ivType,
                                      _("Incompatible types."));
             break;

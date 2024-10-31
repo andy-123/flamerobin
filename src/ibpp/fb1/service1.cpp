@@ -45,7 +45,7 @@ void ServiceImplFb1::Connect()
 
 	// Attach to the Service Manager
 	IBS status;
-	SPB spb;
+	SPBFb1 spb;
 	std::string connect;
 
 	// Build a SPB based on	the properties
@@ -132,7 +132,7 @@ void ServiceImplFb1::GetVersion(std::string& version)
 		throw LogicExceptionImpl("Service::GetVersion", _("Service is not connected."));
 
 	IBS status;
-	SPB spb;
+	SPBFb1 spb;
 	RB result(250);
 
 	spb.Insert(isc_info_svc_server_version);
@@ -161,7 +161,7 @@ void ServiceImplFb1::AddUser(const IBPP::User& user)
 		throw LogicExceptionImpl("Service::AddUser", _("Password required."));
 
 	IBS status;
-	SPB spb;
+	SPBFb1 spb;
 	spb.Insert(isc_action_svc_add_user);
 	spb.InsertString(isc_spb_sec_username, 2, user.username.c_str());
 	spb.InsertString(isc_spb_sec_password, 2, user.password.c_str());
@@ -191,7 +191,7 @@ void ServiceImplFb1::ModifyUser(const IBPP::User& user)
 		throw LogicExceptionImpl("Service::ModifyUser", _("Username required."));
 
 	IBS status;
-	SPB spb;
+	SPBFb1 spb;
 
 	spb.Insert(isc_action_svc_modify_user);
 	spb.InsertString(isc_spb_sec_username, 2, user.username.c_str());
@@ -224,7 +224,7 @@ void ServiceImplFb1::RemoveUser(const std::string& username)
 		throw LogicExceptionImpl("Service::RemoveUser", _("Username required."));
 
 	IBS status;
-	SPB spb;
+	SPBFb1 spb;
 
 	spb.Insert(isc_action_svc_delete_user);
 	spb.InsertString(isc_spb_sec_username, 2, username.c_str());
@@ -243,7 +243,7 @@ void ServiceImplFb1::GetUser(IBPP::User& user)
 	if (user.username.empty())
 		throw LogicExceptionImpl("Service::GetUser", _("Username required."));
 
-	SPB spb;
+	SPBFb1 spb;
 	spb.Insert(isc_action_svc_display_user);
 	spb.InsertString(isc_spb_sec_username, 2, user.username.c_str());
 
@@ -310,7 +310,7 @@ void ServiceImplFb1::GetUsers(std::vector<IBPP::User>& users)
 	if (mHandle == 0)
 		throw LogicExceptionImpl("Service::GetUsers", _("Service is not connected."));
 
-	SPB spb;
+	SPBFb1 spb;
 	spb.Insert(isc_action_svc_display_user);
 
 	IBS status;
@@ -384,7 +384,7 @@ void ServiceImplFb1::SetPageBuffers(const std::string& dbfile, int buffers)
 		throw LogicExceptionImpl("Service::SetPageBuffers", _("Main database file must be specified."));
 
 	IBS status;
-	SPB spb;
+	SPBFb1 spb;
 
 	spb.Insert(isc_action_svc_properties);
 	spb.InsertString(isc_spb_dbname, 2, dbfile.c_str());
@@ -405,7 +405,7 @@ void ServiceImplFb1::SetSweepInterval(const std::string& dbfile, int sweep)
 		throw LogicExceptionImpl("Service::SetSweepInterval", _("Main database file must be specified."));
 
 	IBS status;
-	SPB spb;
+	SPBFb1 spb;
 
 	spb.Insert(isc_action_svc_properties);
 	spb.InsertString(isc_spb_dbname, 2, dbfile.c_str());
@@ -426,7 +426,7 @@ void ServiceImplFb1::SetSyncWrite(const std::string& dbfile, bool sync)
 		throw LogicExceptionImpl("Service::SetSyncWrite", _("Main database file must be specified."));
 
 	IBS status;
-	SPB spb;
+	SPBFb1 spb;
 
 	spb.Insert(isc_action_svc_properties);
 	spb.InsertString(isc_spb_dbname, 2, dbfile.c_str());
@@ -448,7 +448,7 @@ void ServiceImplFb1::SetReadOnly(const std::string& dbfile, bool readonly)
 		throw LogicExceptionImpl("Service::SetReadOnly", _("Main database file must be specified."));
 
 	IBS status;
-	SPB spb;
+	SPBFb1 spb;
 
 	spb.Insert(isc_action_svc_properties);
 	spb.InsertString(isc_spb_dbname, 2, dbfile.c_str());
@@ -470,7 +470,7 @@ void ServiceImplFb1::SetReserveSpace(const std::string& dbfile, bool reserve)
 		throw LogicExceptionImpl("Service::SetReserveSpace", _("Main database file must be specified."));
 
 	IBS status;
-	SPB spb;
+	SPBFb1 spb;
 
 	spb.Insert(isc_action_svc_properties);
 	spb.InsertString(isc_spb_dbname, 2, dbfile.c_str());
@@ -492,7 +492,7 @@ void ServiceImplFb1::Shutdown(const std::string& dbfile, IBPP::DSM flags, int se
 		throw LogicExceptionImpl("Service::Shutdown", _("Main database file must be specified."));
 
 	IBS status;
-	SPB spb;
+	SPBFb1 spb;
 
 	spb.Insert(isc_action_svc_properties);
 	spb.InsertString(isc_spb_dbname, 2, dbfile.c_str());
@@ -533,7 +533,7 @@ void ServiceImplFb1::Restart(const std::string& dbfile, IBPP::DSM /*flags*/)
 		throw LogicExceptionImpl("Service::Restart", _("Main database file must be specified."));
 
 	IBS status;
-	SPB spb;
+	SPBFb1 spb;
 
 	spb.Insert(isc_action_svc_properties);
 	spb.InsertString(isc_spb_dbname, 2, dbfile.c_str());
@@ -554,7 +554,7 @@ void ServiceImplFb1::Sweep(const std::string& dbfile)
 		throw LogicExceptionImpl("Service::Sweep", _("Main database file must be specified."));
 
 	IBS status;
-	SPB spb;
+	SPBFb1 spb;
 
 	spb.Insert(isc_action_svc_repair);
 	spb.InsertString(isc_spb_dbname, 2, dbfile.c_str());
@@ -575,7 +575,7 @@ void ServiceImplFb1::Repair(const std::string& dbfile, IBPP::RPF flags)
 		throw LogicExceptionImpl("Service::Repair", _("Main database file must be specified."));
 
 	IBS status;
-	SPB spb;
+	SPBFb1 spb;
 
 	spb.Insert(isc_action_svc_repair);
 	spb.InsertString(isc_spb_dbname, 2, dbfile.c_str());
@@ -616,7 +616,7 @@ void ServiceImplFb1::StartBackup(
 		throw LogicExceptionImpl("Service::Backup", _("Backup file must be specified."));
 
 	IBS status;
-	SPB spb;
+	SPBFb1 spb;
 
 	spb.Insert(isc_action_svc_backup);
 	spb.InsertString(isc_spb_dbname, 2, dbfile.c_str());
@@ -704,7 +704,7 @@ void ServiceImplFb1::StartRestore(
 		throw LogicExceptionImpl("Service::Restore", _("Main database file must be specified."));
 
 	IBS status;
-	SPB spb;
+	SPBFb1 spb;
 
 	spb.Insert(isc_action_svc_restore);
 	spb.InsertString(isc_spb_bkp_file, 2, bkfile.c_str());	spb.InsertString(isc_spb_dbname, 2, dbfile.c_str());
@@ -792,7 +792,7 @@ void ServiceImplFb1::StartRestore(
 const char* ServiceImplFb1::WaitMsg()
 {
 	IBS status;
-	SPB req;
+	SPBFb1 req;
 	RB result(1024);
 
 	req.Insert(isc_info_svc_line);	// Request one line of textual output
@@ -814,7 +814,7 @@ const char* ServiceImplFb1::WaitMsg()
 void ServiceImplFb1::Wait()
 {
 	IBS status;
-	SPB spb;
+	SPBFb1 spb;
 	RB result(1024);
 	std::string msg;
 

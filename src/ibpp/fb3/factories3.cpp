@@ -79,6 +79,7 @@ Events FactoriesImplFb3::CreateEvents(Database db)
 bool FactoriesImplFb3::gIsInit = false;
 bool FactoriesImplFb3::gAvailable = false;
 IMaster* FactoriesImplFb3::gMaster = nullptr;
+IProvider* FactoriesImplFb3::gProv = nullptr;
 IUtil* FactoriesImplFb3::gUtil = nullptr;
 proto_get_database_handle* FactoriesImplFb3::m_get_database_handle = nullptr;
 proto_get_transaction_handle* FactoriesImplFb3::m_get_transaction_handle = nullptr;
@@ -98,6 +99,7 @@ bool FactoriesImplFb3::gInit(ibpp_HMODULE h)
     {
         gAvailable = true;
         gMaster = m_get_master_interface();
+        gProv = gMaster->getDispatcher();
         gUtil = gMaster->getUtilInterface();
         FB_LOADDYN(h, get_database_handle);
         FB_LOADDYN(h, get_transaction_handle);

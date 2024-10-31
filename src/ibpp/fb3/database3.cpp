@@ -92,8 +92,7 @@ void DatabaseImplFb3::Connect()
         connect.assign(mServerName).append(":");
     connect.append(mDatabaseName);
 
-    IMaster* master = FactoriesImplFb3::gMaster;
-    IProvider* prov = master->getDispatcher();
+    IProvider* prov = FactoriesImplFb3::gProv;
     mAtm = prov->attachDatabase(mStatus, connect.c_str(),
                                 dpb.GetBufferLength(), dpb.GetBuffer());
     if (mStatus->isDirty())

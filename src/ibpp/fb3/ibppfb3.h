@@ -60,6 +60,44 @@ public:
 };
 
 //
+//  Service Parameter Block (used to define a service)
+//
+
+class SPBFb3
+{
+public:
+    enum SPBType
+    {
+        attach,
+        service_start,
+        query_send,
+        query_receive/*,
+        query_response*/
+    };
+private:
+    IXpbBuilder* mSPB;
+    ThrowStatusWrapper* mStatus;
+
+public:
+    // Insert a single byte code
+    void InsertTag(const unsigned char tag);
+    // Insert a string
+    void InsertString(unsigned char tag, const std::string& str);
+    void InsertByte(unsigned char tag, int8_t data);
+    void InsertQuad(unsigned char tag, int32_t data);
+
+    void Clear();
+    const unsigned char* GetBuffer();
+    unsigned GetBufferLength();
+
+    //FIXME
+    IXpbBuilder* GetFbIntf() { return mSPB; };
+
+    SPBFb3(SPBType type);
+    ~SPBFb3();
+};
+
+//
 //  Transaction Parameter Block (used to define a transaction)
 //
 
@@ -84,7 +122,8 @@ class ServiceImplFb3 : public IBPP::IService
     //  (((((((( OBJECT INTERNALS ))))))))
 
 private:
-    isc_svc_handle mHandle;     // Firebird API Service Handle
+    CheckStatusWrapper* mStatus;
+    Firebird::IService* mSvc;   // Firebird API Service Handle
     std::string mServerName;    // Server Name
     std::string mUserName;      // User Name
     std::string mUserPassword;  // User Password
@@ -98,7 +137,6 @@ private:
     int build_no;
 
 
-    isc_svc_handle* GetHandlePtr() { return &mHandle; }
     void SetServerName(const char*);
     void SetUserName(const char*);
     void SetUserPassword(const char*);
@@ -107,12 +145,11 @@ private:
 
 
 public:
-    isc_svc_handle GetHandle() { return mHandle; }
+    Firebird::IService* GetFbIntf() { return mSvc; }
 
     ServiceImplFb3(const std::string& ServerName, const std::string& UserName,
                 const std::string& UserPassword, const std::string& RoleName,
-                const std::string& CharSet
-        );
+                const std::string& CharSet);
     ~ServiceImplFb3();
     FBCLIENT getGDS() const { return gds; };
 
@@ -120,7 +157,7 @@ public:
 
 public:
     void Connect();
-    bool Connected() { return mHandle == 0 ? false : true; }
+    bool Connected() { return mSvc == nullptr ? false : true; }
     void Disconnect();
 
     void GetVersion(std::string& version);
@@ -865,6 +902,7 @@ public:
     static proto_get_transaction_handle* m_get_transaction_handle;
     // firebird 3+ interfaces
     static IMaster* gMaster;
+    static IProvider* gProv;
     static IUtil* gUtil;
     // internal ibpp utils fb3+
     static ibpp_internals::UtlFb3* gUtlFb3;

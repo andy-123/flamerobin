@@ -23,6 +23,7 @@
 #endif
 
 #include "_ibpp.h"
+#include "fb1/ibppfb1.h"
 
 #ifdef HAS_HDRSTOP
 #pragma hdrstop
@@ -30,9 +31,9 @@
 
 using namespace ibpp_internals;
 
-const int SPB::BUFFERINCR = 128;
+const int SPBFb1::BUFFERINCR = 128;
 
-void SPB::Grow(int needed)
+void SPBFb1::Grow(int needed)
 {
 	if ((mSize + needed) > mAlloc)
 	{
@@ -50,13 +51,13 @@ void SPB::Grow(int needed)
 	}
 }
 
-void SPB::Insert(char opcode)
+void SPBFb1::Insert(char opcode)
 {
 	Grow(1);
 	mBuffer[mSize++] = opcode;
 }
 
-void SPB::InsertString(char type, int lenwidth, const char* data)
+void SPBFb1::InsertString(char type, int lenwidth, const char* data)
 {
 	int16_t len = (int16_t)strlen(data);
 
@@ -67,20 +68,20 @@ void SPB::InsertString(char type, int lenwidth, const char* data)
 		case 1 :	mBuffer[mSize] = char(len); mSize++; break;
 		case 2 :	*(int16_t*)&mBuffer[mSize] = int16_t((*gds.Call()->m_vax_integer)((char*)&len, 2));
 					mSize += 2; break;
-		default :	throw LogicExceptionImpl("IISPB::IISPB", _("Invalid length parameter"));
+		default :	throw LogicExceptionImpl("IISPBFb1::IISPB", _("Invalid length parameter"));
 	}
 	strncpy(&mBuffer[mSize], data, len);
 	mSize += len;
 }
 
-void SPB::InsertByte(char type, char data)
+void SPBFb1::InsertByte(char type, char data)
 {
 	Grow(1 + 1);
 	mBuffer[mSize++] = type;
 	mBuffer[mSize++] = data;
 }
 
-void SPB::InsertQuad(char type, int32_t data)
+void SPBFb1::InsertQuad(char type, int32_t data)
 {
 	Grow(1 + 4);
 	mBuffer[mSize++] = type;
@@ -88,7 +89,7 @@ void SPB::InsertQuad(char type, int32_t data)
 	mSize += 4;
 }
 
-void SPB::Reset()
+void SPBFb1::Reset()
 {
 	if (mBuffer != 0)
 	{
@@ -100,7 +101,7 @@ void SPB::Reset()
 }
 
 /*
-void SPB::Insert(char type, short data)
+void SPBFb1::Insert(char type, short data)
 {
 	Grow(1 + 3);
 	mBuffer[mSize++] = type;
@@ -109,7 +110,7 @@ void SPB::Insert(char type, short data)
 	mSize += 2;
 }
 
-void SPB::Insert(char type, bool data)
+void SPBFb1::Insert(char type, bool data)
 {
 	Grow(1 + 2);
 	mBuffer[mSize++] = type;
